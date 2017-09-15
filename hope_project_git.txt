@@ -1,0 +1,3864 @@
+= V4 Outline MultiLine NoSorting TabWidth=30
+
+H="Libraries"
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
+
+H="Identifying qualified SMI/MM Jan-Sept 2015"
+/* Import Spreadsheet */
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17.xlsx" out=demographics dbms=xlsx replace; 
+	sheet="Demographics"; 
+	getnames=YES;
+	run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17.xlsx" out=problemlist dbms=xlsx replace;
+	 sheet="Problem List";
+	 getnames=YES;
+	 run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" out=dob1 dbms=csv replace; 
+getnames=YES;
+run;
+
+data encounterlist; /*utilization for the 42k mrn */
+set hope.encounterlistv2;
+date = input(encounter_date, mmddyy10.);
+format date date10.;
+mrn1 = input(mrn, best12.);
+run;
+
+data encounterlist;
+set encounterlist;
+where month(date)<=9;
+run;
+
+data dob1;
+set dob1 (rename=(date_of_birth = dob)); 
+mrn = input(medical_record_number, best12.);
+benchmark=MDY(1,1,2015);
+age = (benchmark-dob)/365.25;
+age = round(age);
+run;
+
+proc export data=dob1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" dbms=csv replace; run;
+
+/* Identify >=65
+
+proc sql;
+create table demo1 as select a.*, b.zip, b.gender, b.insurance
+from dob1 a
+inner join 
+demographics b
+on a.mrn = b.mrn;
+quit;
+
+data demo1;
+set demo1;
+zip1 = substr(zip,1,3);
+run;
+*/
+
+data demo1; /* cut sample */
+set dob1;
+where age>=65;
+run;
+
+/*
+data demo1;
+set demo1;
+where mrn not in (1229149,2077348,2433995,7591684); /* removing people who have no smi/mm 
+run;
+
+proc export data=demo1 (keep=mrn dob) outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mrnlist.csv" dbms=csv replace; run; /*mrn list
+*/
+
+proc sql;
+create table sample as select a.*, b.date, b.msdw_encounter_type, b.icd9_code, b.diagnosis_description
+from demo1 a
+inner join encounterlist b
+on a.mrn = b.mrn1;
+quit;
+
+
+data combined;
+set sample;
+dx_code = compress(ICD9_CODE, .);
+smi_dem= 0;
+smi_cancer = 0;
+smi_esrd= 0;
+smi_chf = 0;
+smi_copd = 0;
+smi_dia = 0;
+smi_ald = 0;
+smi_hiv = 0;
+smi_als = 0;
+smi_hip = 0;
+smi_rd = 0;
+smi_ihd = 0;
+smi_pvd = 0;
+dart_cancer = 0;
+dart_copd = 0;
+dart_cad = 0;
+dart_chf = 0;
+dart_pvd = 0;
+dart_cld = 0;
+dart_diab = 0;
+dart_renal = 0;
+dart_dem = 0;
+array dx dx_code;
+do over dx;
+/*SMI - Dementia ICD-9 */
+if(substr(dx,1,4)='3310' or
+   substr(dx,1,4)='3311' or
+   substr(dx,1,4)='3312' or
+   substr(dx,1,4)='2900' or
+   substr(dx,1,4)='2901' or
+   substr(dx,1,4)='2902' or
+   substr(dx,1,4)='2903' or
+   substr(dx,1,4)='2912' or
+   substr(dx,1,4)='2948' or
+   substr(dx,1,4)='2949' or
+   substr(dx,1,5)='29410' or
+   substr(dx,1,5)='29411' or
+   substr(dx,1,5)='29040' or
+   substr(dx,1,5)='29041' or
+   substr(dx,1,5)='29042' or
+   substr(dx,1,5)='29043' )
+  /* SMI - Dementia ICD-10
+   substr(dx,1,4)='G309' or
+   substr(dx,1,5)='G3101' or
+   substr(dx,1,4)='G311' or
+   substr(dx,1,5)='F0390' or
+   substr(dx,1,3)='F05' or
+   substr(dx,1,5)='F1027' or
+   substr(dx,1,4)='F060' or
+   substr(dx,1,4)='F068' or
+   substr(dx,1,5)='F0280' or
+   substr(dx,1,5)='F0281' or
+   substr(dx,1,5)='F0150' or 
+   substr(dx,1,5)='F0151') */
+   and smi_dem=0 
+   then smi_dem=1;
+/* SMI - Cancer */
+if(substr(dx,1,3)='196' or
+   substr(dx,1,3)='197' or
+   substr(dx,1,3)='198' or
+   substr(dx,1,3)='199' or
+   substr(dx,1,3)='204' or
+   substr(dx,1,3)='205' or
+   substr(dx,1,3)='206' or
+   substr(dx,1,3)='207' or
+   substr(dx,1,3)='208' or
+   substr(dx,1,4)='1500' or
+   substr(dx,1,4)='1501' or
+   substr(dx,1,4)='1502' or
+   substr(dx,1,4)='1503' or
+   substr(dx,1,4)='1504' or
+   substr(dx,1,4)='1505' or
+   substr(dx,1,4)='1508' or
+   substr(dx,1,4)='1509' or
+   substr(dx,1,4)='1510' or
+   substr(dx,1,4)='1511' or
+   substr(dx,1,4)='1512' or
+   substr(dx,1,4)='1513' or
+   substr(dx,1,4)='1514' or
+   substr(dx,1,4)='1515' or
+   substr(dx,1,4)='1516' or
+   substr(dx,1,4)='1518' or
+   substr(dx,1,4)='1519' or
+   substr(dx,1,4)='1550' or
+   substr(dx,1,4)='1551' or
+   substr(dx,1,4)='1552' or
+   substr(dx,1,4)='1570' or
+   substr(dx,1,4)='1571' or
+   substr(dx,1,4)='1572' or
+   substr(dx,1,4)='1573' or
+   substr(dx,1,4)='1574' or
+   substr(dx,1,4)='1578' or
+   substr(dx,1,4)='1579' or
+   substr(dx,1,4)='1580' or
+   substr(dx,1,4)='1588' or
+   substr(dx,1,4)='1589' or
+   substr(dx,1,4)='1620' or
+   substr(dx,1,4)='1622' or
+   substr(dx,1,4)='1623' or
+   substr(dx,1,4)='1624' or
+   substr(dx,1,4)='1625' or
+   substr(dx,1,4)='1628' or
+   substr(dx,1,4)='1629' or
+   substr(dx,1,4)='1630' or
+   substr(dx,1,4)='1631' or
+   substr(dx,1,4)='1638' or
+   substr(dx,1,4)='1639' or
+   substr(dx,1,4)='1830' or
+   substr(dx,1,4)='1832' or
+   substr(dx,1,4)='1833' or
+   substr(dx,1,4)='1834' or
+   substr(dx,1,4)='1835' or
+   substr(dx,1,4)='1838' or
+   substr(dx,1,4)='1839' or
+   substr(dx,1,4)='1910' or
+   substr(dx,1,4)='1911' or
+   substr(dx,1,4)='1912' or
+   substr(dx,1,4)='1913' or
+   substr(dx,1,4)='1913' or
+   substr(dx,1,4)='1914' or
+   substr(dx,1,4)='1915' or
+   substr(dx,1,4)='1916' or
+   substr(dx,1,4)='1917' or
+   substr(dx,1,4)='1918' or
+   substr(dx,1,4)='1919' or
+   substr(dx,1,4)='2890' )
+   /* ICD 10 - Cancer
+substr(dx,1,4)=	'C153'	or
+substr(dx,1,4)=	'C154'	or
+substr(dx,1,4)=	'C155'	or
+substr(dx,1,4)=	'C158'	or
+substr(dx,1,4)=	'C159'	or
+substr(dx,1,4)=	'C160'	or
+substr(dx,1,4)=	'C161'	or
+substr(dx,1,4)=	'C162'	or
+substr(dx,1,4)=	'C163'	or
+substr(dx,1,4)=	'C164'	or
+substr(dx,1,4)=	'C165'	or
+substr(dx,1,4)=	'C166'	or
+substr(dx,1,4)=	'C168'	or
+substr(dx,1,4)=	'C169'	or
+substr(dx,1,4)=	'C220'	or
+substr(dx,1,4)=	'C221'	or
+substr(dx,1,4)=	'C222'	or
+substr(dx,1,4)=	'C227'	or
+substr(dx,1,4)=	'C228'	or
+substr(dx,1,4)=	'C229'	or
+substr(dx,1,4)=	'C250'	or
+substr(dx,1,4)=	'C251'	or
+substr(dx,1,4)=	'C252'	or
+substr(dx,1,4)=	'C253'	or
+substr(dx,1,4)=	'C254'	or
+substr(dx,1,4)=	'C257'	or
+substr(dx,1,4)=	'C258'	or
+substr(dx,1,4)=	'C259'	or
+substr(dx,1,3)=	'C33'	or
+substr(dx,1,5)=	'C3400'	or
+substr(dx,1,5)=	'C3410'	or
+substr(dx,1,4)=	'C342'	or
+substr(dx,1,5)=	'C3430'	or
+substr(dx,1,5)=	'C3480'	or
+substr(dx,1,5)=	'C3490'	or
+substr(dx,1,4)=	'C384'	or
+substr(dx,1,4)=	'C480'	or
+substr(dx,1,4)=	'C481'	or
+substr(dx,1,4)=	'C482'	or
+substr(dx,1,4)=	'C488'	or
+substr(dx,1,4)=	'C569'	or
+substr(dx,1,5)=	'C5700'	or
+substr(dx,1,5)=	'C5710'	or
+substr(dx,1,5)=	'C5720'	or
+substr(dx,1,4)=	'C573'	or
+substr(dx,1,4)=	'C574'	or
+substr(dx,1,4)=	'C710'	or
+substr(dx,1,4)=	'C711'	or
+substr(dx,1,4)=	'C712'	or
+substr(dx,1,4)=	'C713'	or
+substr(dx,1,4)=	'C714'	or
+substr(dx,1,4)=	'C715'	or
+substr(dx,1,4)=	'C716'	or
+substr(dx,1,4)=	'C717'	or
+substr(dx,1,4)=	'C718'	or
+substr(dx,1,4)=	'C719'	or
+substr(dx,1,4)=	'C770'	or
+substr(dx,1,4)=	'C771'	or
+substr(dx,1,4)=	'C772'	or
+substr(dx,1,4)=	'C773'	or
+substr(dx,1,4)=	'C774'	or
+substr(dx,1,4)=	'C775'	or
+substr(dx,1,4)=	'C778'	or
+substr(dx,1,4)=	'C779'	or
+substr(dx,1,5)=	'C7800'	or
+substr(dx,1,4)=	'C781'	or
+substr(dx,1,4)=	'C782'	or
+substr(dx,1,5)=	'C7839'	or
+substr(dx,1,4)=	'C784'	or
+substr(dx,1,4)=	'C785'	or
+substr(dx,1,4)=	'C786'	or
+substr(dx,1,4)=	'C787'	or
+substr(dx,1,5)=	'C7889'	or
+substr(dx,1,5)=	'C7900'	or
+substr(dx,1,5)=	'C7911'	or
+substr(dx,1,5)=	'C7919'	or
+substr(dx,1,4)=	'C792'	or
+substr(dx,1,5)=	'C7931'	or
+substr(dx,1,5)=	'C7932'	or
+substr(dx,1,5)=	'C7949'	or
+substr(dx,1,5)=	'C7951'	or
+substr(dx,1,5)=	'C7952'	or
+substr(dx,1,5)=	'C7960'	or
+substr(dx,1,5)=	'C7970'	or
+substr(dx,1,5)=	'C7981'	or
+substr(dx,1,5)=	'C7982'	or
+substr(dx,1,5)=	'C7989'	or
+substr(dx,1,4)=	'C800'	or
+substr(dx,1,4)=	'C801'	or
+substr(dx,1,4)=	'C802'	or
+substr(dx,1,5)=	'C9100'	or
+substr(dx,1,5)=	'C9101'	or
+substr(dx,1,5)=	'C9102'	or
+substr(dx,1,5)=	'C9110'	or
+substr(dx,1,5)=	'C9111'	or
+substr(dx,1,5)=	'C9112'	or
+substr(dx,1,5)=	'C9190'	or
+substr(dx,1,5)=	'C9191'	or
+substr(dx,1,5)=	'C9192'	or
+substr(dx,1,5)=	'C91Z0'	or
+substr(dx,1,5)=	'C91Z1'	or
+substr(dx,1,5)=	'C91Z2'	or
+substr(dx,1,5)=	'C9200'	or
+substr(dx,1,5)=	'C9201'	or
+substr(dx,1,5)=	'C9202'	or
+substr(dx,1,5)=	'C9210'	or
+substr(dx,1,5)=	'C9211'	or
+substr(dx,1,5)=	'C9212'	or
+substr(dx,1,5)=	'C9220'	or
+substr(dx,1,5)=	'C9221'	or
+substr(dx,1,5)=	'C9222'	or
+substr(dx,1,5)=	'C9230'	or
+substr(dx,1,5)=	'C9231'	or
+substr(dx,1,5)=	'C9232'	or
+substr(dx,1,5)=	'C9240'	or
+substr(dx,1,5)=	'C9241'	or
+substr(dx,1,5)=	'C9242'	or
+substr(dx,1,5)=	'C9250'	or
+substr(dx,1,5)=	'C9251'	or
+substr(dx,1,5)=	'C9252'	or
+substr(dx,1,5)=	'C9290'	or
+substr(dx,1,5)=	'C9291'	or
+substr(dx,1,5)=	'C9292'	or
+substr(dx,1,5)=	'C92Z0'	or
+substr(dx,1,5)=	'C92Z1'	or
+substr(dx,1,5)=	'C92Z2'	or
+substr(dx,1,5)=	'C9300'	or
+substr(dx,1,5)=	'C9301'	or
+substr(dx,1,5)=	'C9302'	or
+substr(dx,1,5)=	'C9310'	or
+substr(dx,1,5)=	'C9311'	or
+substr(dx,1,5)=	'C9312'	or
+substr(dx,1,5)=	'C9390'	or
+substr(dx,1,5)=	'C9391'	or
+substr(dx,1,5)=	'C9392'	or
+substr(dx,1,5)=	'C93Z0'	or
+substr(dx,1,5)=	'C93Z1'	or
+substr(dx,1,5)=	'C93Z2'	or
+substr(dx,1,5)=	'C9400'	or
+substr(dx,1,5)=	'C9401'	or
+substr(dx,1,5)=	'C9402'	or
+substr(dx,1,5)=	'C9420'	or
+substr(dx,1,5)=	'C9421'	or
+substr(dx,1,5)=	'C9422'	or
+substr(dx,1,5)=	'C9430'	or
+substr(dx,1,5)=	'C9431'	or
+substr(dx,1,5)=	'C9432'	or
+substr(dx,1,5)=	'C9480'	or
+substr(dx,1,5)=	'C9481'	or
+substr(dx,1,5)=	'C9482'	or
+substr(dx,1,5)=	'C9500'	or
+substr(dx,1,5)=	'C9501'	or
+substr(dx,1,5)=	'C9502'	or
+substr(dx,1,5)=	'C9510'	or
+substr(dx,1,5)=	'C9511'	or
+substr(dx,1,5)=	'C9512'	or
+substr(dx,1,5)=	'C9590'	or
+substr(dx,1,5)=	'C9591'	or
+substr(dx,1,5)=	'C9592'	or
+substr(dx,1,3)=	'D45'	or
+substr(dx,1,4)=	'D751' ) */
+and smi_cancer=0
+then smi_cancer=1;
+/* ICD 9 - Advanced Liver Disease */
+if(substr(dx,1,4)='4560' or
+substr(dx,1,4)='4561'    or
+substr(dx,1,5)='45620'   or
+substr(dx,1,5)='45621'   or
+substr(dx,1,4)='5710'    or
+substr(dx,1,4)='5712'    or
+substr(dx,1,4)='5715'    or
+substr(dx,1,4)='5716'    or
+substr(dx,1,4)='5718'    or
+substr(dx,1,4)='5719'    or
+substr(dx,1,4)='5723'    or
+substr(dx,1,4)='5724'    or
+substr(dx,1,4)='5728'    or
+substr(dx,1,4)=	'V427' )
+/* ICD 10 - Advanced Liver Disease
+substr(dx,1,5)=	'I8500'  or
+substr(dx,1,5)=	'I8501'  or
+substr(dx,1,5)=	'I8510'  or
+substr(dx,1,5)=	'I8511'  or
+substr(dx,1,4)=	'K700'   or
+substr(dx,1,5)=	'K7030'  or
+substr(dx,1,5)=	'K7210'  or
+substr(dx,1,5)=	'K7290'  or
+substr(dx,1,4)=	'K740'   or
+substr(dx,1,4)=	'K741'   or
+substr(dx,1,4)=	'K743'   or
+substr(dx,1,4)=	'K744'   or
+substr(dx,1,4)=	'K745'   or
+substr(dx,1,5)=	'K7460'  or
+substr(dx,1,5)=	'K7469'  or
+substr(dx,1,4)=	'K760'   or
+substr(dx,1,4)=	'K766'   or
+substr(dx,1,4)=	'K767'   or
+substr(dx,1,5)=	'K7689'  or
+substr(dx,1,4)=	'K769'   or
+substr(dx,1,4)=	'Z944'  ) */
+and smi_ald=0
+then smi_ald=1;
+/* ICD 9 - ALS */
+if(substr(dx,1,5)='33520' )
+/* ICD 10 - ALS 
+substr(dx,1,5)='G1221') */
+and smi_als = 0
+then smi_als = 1;
+/* ICD 9 - CHF */
+if(substr(dx,1,5)='39891'  or
+substr(dx,1,5)=	'40211'    or
+substr(dx,1,5)=	'40291'    or
+substr(dx,1,5)=	'40411'    or
+substr(dx,1,5)=	'40413'    or
+substr(dx,1,5)=	'40491'    or
+substr(dx,1,5)=	'40493'    or
+substr(dx,1,4)=	'4280'     or
+substr(dx,1,4)=	'4281'     or
+substr(dx,1,5)=	'42820'    or
+substr(dx,1,5)=	'42821'    or
+substr(dx,1,5)=	'42822'    or
+substr(dx,1,5)=	'42823'    or
+substr(dx,1,5)=	'42830'    or
+substr(dx,1,5)=	'42831'    or
+substr(dx,1,5)=	'42832'    or
+substr(dx,1,5)=	'42833'    or
+substr(dx,1,5)=	'42840'    or
+substr(dx,1,5)=	'42841'    or
+substr(dx,1,5)=	'42842'    or
+substr(dx,1,5)=	'42843'    or
+substr(dx,1,4)=	'4289'  )
+/* ICD 10 - CHF
+substr(dx,1,5)='I0981'   or
+substr(dx,1,4)='I110'    or
+substr(dx,1,4)='I130'    or
+substr(dx,1,4)='I132'    or
+substr(dx,1,4)='I501'    or
+substr(dx,1,5)='I5020'   or
+substr(dx,1,5)='I5021'   or
+substr(dx,1,5)='I5022'   or
+substr(dx,1,5)='I5023'   or
+substr(dx,1,5)='I5030'   or
+substr(dx,1,5)='I5031'   or
+substr(dx,1,5)='I5032'   or
+substr(dx,1,5)='I5033'   or
+substr(dx,1,5)='I5040'   or
+substr(dx,1,5)='I5041'   or
+substr(dx,1,5)='I5042'   or
+substr(dx,1,5)='I5043'   or
+substr(dx,1,4)='I509') */
+and diagnosis_description = 'Principal'
+and msdw_encounter_type='Inpatient'
+and smi_chf = 0
+then smi_chf = 1;
+/* ICD 9 - COPD */
+if(substr(dx,1,3)='490' or
+substr(dx,1,4)='4910'   or
+substr(dx,1,4)='4911'   or
+substr(dx,1,5)='49120'  or
+substr(dx,1,5)='49121'  or
+substr(dx,1,5)='49122'  or
+substr(dx,1,4)='4918'   or
+substr(dx,1,4)='4919'   or
+substr(dx,1,4)='4920'   or
+substr(dx,1,4)='4928'   or
+substr(dx,1,5)='49300'  or
+substr(dx,1,5)='49301'  or
+substr(dx,1,5)='49302'  or
+substr(dx,1,5)='49310'  or
+substr(dx,1,5)='49311'  or
+substr(dx,1,5)='49312'  or
+substr(dx,1,5)='49320'  or
+substr(dx,1,5)='49321'  or
+substr(dx,1,5)='49322'  or
+substr(dx,1,5)='49381'  or
+substr(dx,1,5)='49382'  or
+substr(dx,1,5)='49390'  or
+substr(dx,1,5)='49391'  or
+substr(dx,1,4)='4940'   or
+substr(dx,1,4)='4941'   or
+substr(dx,1,4)='4950'   or
+substr(dx,1,4)='4951'   or
+substr(dx,1,4)='4952'   or
+substr(dx,1,4)='4953'   or
+substr(dx,1,4)='4954'   or
+substr(dx,1,4)='4955'   or
+substr(dx,1,4)='4956'   or
+substr(dx,1,4)='4957'   or
+substr(dx,1,4)='4958'   or
+substr(dx,1,4)='4959'   or
+substr(dx,1,3)='496'    or
+substr(dx,1,3)='500'    or
+substr(dx,1,3)='501'    or
+substr(dx,1,3)='502'    or
+substr(dx,1,3)='503'    or
+substr(dx,1,3)='504'    or
+substr(dx,1,3)='505'    or
+substr(dx,1,4)='5064'   )
+/* ICD 10 - COPD 
+substr(dx,1,3)=	'J40'	    or
+substr(dx,1,4)=	'J410'	or
+substr(dx,1,4)=	'J411'	or
+substr(dx,1,4)=	'J418'	or
+substr(dx,1,3)=	'J42'	    or
+substr(dx,1,4)=	'J439'	or
+substr(dx,1,4)=	'J440'	or
+substr(dx,1,4)=	'J441'	or
+substr(dx,1,4)=	'J449'	or
+substr(dx,1,5)=	'J4520'	or
+substr(dx,1,5)=	'J4521'	or
+substr(dx,1,5)=	'J4522'	or
+substr(dx,1,6)=	'J45902'	or
+substr(dx,1,6)=	'J45909'	or
+substr(dx,1,6)=	'J45990'	or
+substr(dx,1,6)=	'J45991'	or
+substr(dx,1,6)=	'J45998'	or
+substr(dx,1,4)=	'J471'	or
+substr(dx,1,4)=	'J479'	or
+substr(dx,1,3)=	'J60'	    or
+substr(dx,1,3)=	'J61'	    or
+substr(dx,1,4)=	'J628'	or
+substr(dx,1,4)=	'J630'	or
+substr(dx,1,4)=	'J631'	or
+substr(dx,1,4)=	'J632'	or
+substr(dx,1,4)=	'J633'	or
+substr(dx,1,4)=	'J634'	or
+substr(dx,1,4)=	'J635'	or
+substr(dx,1,4)=	'J636'	or
+substr(dx,1,3)=	'J64'	    or
+substr(dx,1,4)=	'J660'	or
+substr(dx,1,4)=	'J661'	or
+substr(dx,1,4)=	'J662'	or
+substr(dx,1,4)=	'J668'	or
+substr(dx,1,4)=	'J670'	or
+substr(dx,1,4)=	'J671'	or
+substr(dx,1,4)=	'J672'	or
+substr(dx,1,4)=	'J673'	or
+substr(dx,1,4)=	'J674'	or
+substr(dx,1,4)=	'J675'	or
+substr(dx,1,4)=	'J676'	or
+substr(dx,1,4)=	'J677'	or
+substr(dx,1,4)=	'J678'	or
+substr(dx,1,4)=	'J679'	or
+substr(dx,1,4)=	'J684'	) */
+and diagnosis_description = 'Principal'
+and msdw_encounter_type='Inpatient'
+and smi_copd=0
+then smi_copd=1;
+/* ICD 9 - Diabetes */
+if(substr(dx,1,5)=	'25040'	or
+ substr(dx,1,5)=	'25041'	or
+ substr(dx,1,5)=	'25042'	or
+ substr(dx,1,5)=	'25043'	or
+ substr(dx,1,5)=	'25050'	or
+ substr(dx,1,5)=	'25051'	or
+ substr(dx,1,5)=	'25052'	or
+ substr(dx,1,5)=	'25053'	or
+ substr(dx,1,5)=	'25060'	or
+ substr(dx,1,5)=	'25061'	or
+ substr(dx,1,5)=	'25062'	or
+ substr(dx,1,5)=	'25063'	or
+ substr(dx,1,5)=	'25070'	or 
+ substr(dx,1,5)=	'25071'	or
+ substr(dx,1,5)=	'25072'	or
+ substr(dx,1,5)=	'25073'	or
+ substr(dx,1,5)=	'25090'	or
+ substr(dx,1,5)=	'25091'	or
+ substr(dx,1,5)=	'25092'	or
+ substr(dx,1,5)=	'25093' )
+ /* ICD 10 - Diabetes 
+substr(dx,1,5)=	'E1021'	or
+substr(dx,1,5)=	'E1029'	or
+substr(dx,1,6)=	'E10311'	or
+substr(dx,1,6)=	'E10319'	or
+substr(dx,1,5)=	'E1036'	or
+substr(dx,1,5)=	'E1037'	or
+substr(dx,1,5)=	'E1039'	or
+substr(dx,1,5)=	'E1040'	or
+substr(dx,1,5)=	'E1051'	or
+substr(dx,1,5)=	'E1065'	or
+substr(dx,1,4)=	'E108'	or
+substr(dx,1,5)=	'E1121'	or
+substr(dx,1,5)=	'E1129'	or
+substr(dx,1,6)=	'E11311'	or
+substr(dx,1,6)=	'E11319'	or
+substr(dx,1,5)=	'E1136'	or
+substr(dx,1,5)=	'E1139'	or
+substr(dx,1,5)=	'E1140'	or
+substr(dx,1,5)=	'E1151'	or
+substr(dx,1,5)=	'E1165'	or
+substr(dx,1,4)=	'E118'	) */
+and smi_dia = 0
+then smi_dia = 1;
+/* ICD 9 - ESRD */
+if(substr(dx,1,5)=	'40311'	or
+substr(dx,1,5)=	'40391'	or
+substr(dx,1,5)=	'40412'	or
+substr(dx,1,5)=	'40492'	or
+substr(dx,1,3)=	'586'	    or
+substr(dx,1,4)=	'V420'	or
+substr(dx,1,5)=	'V4511'	or
+substr(dx,1,5)=	'V4512'	or
+substr(dx,1,4)=	'V560' )
+/* ICD 10 - ESRD 
+substr(dx,1,4)=	'I120' or
+substr(dx,1,5)=	'I1311' or
+substr(dx,1,3)=	'N19'    or
+substr(dx,1,5)=	'Z4931' or
+substr(dx,1,5)=	'Z9115' or
+substr(dx,1,4)=	'Z940' or
+substr(dx,1,4)=	'Z992' ) */
+and smi_esrd = 0
+then smi_esrd = 1;
+/* ICD 9 - Hip Fracture (Admitting) */
+if(substr(dx,1,3)=	'820'	)
+/* ICD 10 - Hip Fracture (Admitting)
+substr(dx,1,4)=	'S720')
+/*and diagnosis_description = 'Admitting'*/
+and smi_hip = 0
+then smi_hip = 1;
+
+/* ICD 9 - HIV */ 
+if(substr(dx,1,3)='042' or
+   substr(dx,1,3)='043' or
+   substr(dx,1,3)='044' )
+/* ICD 10 - HIV 
+substr(dx,1,3)='B20') */
+and smi_hiv = 0
+then smi_hiv = 1;
+/* ICD 9 - Ischemic Heart Disease */
+if(substr(dx,1,5)=	'41000'	or
+substr(dx,1,5)=	'41001'	or
+substr(dx,1,5)=	'41002'	or
+substr(dx,1,5)=	'41010'	or
+substr(dx,1,5)=	'41011'	or
+substr(dx,1,5)=	'41012'	or
+substr(dx,1,5)=	'41020'	or
+substr(dx,1,5)=	'41021'	or
+substr(dx,1,5)=	'41022'	or
+substr(dx,1,5)=	'41030'	or
+substr(dx,1,5)=	'41031'	or
+substr(dx,1,5)=	'41032'	or
+substr(dx,1,5)=	'41040'	or
+substr(dx,1,5)=	'41041'	or
+substr(dx,1,5)=	'41042'	or
+substr(dx,1,5)=	'41050'	or
+substr(dx,1,5)=	'41051'	or
+substr(dx,1,5)=	'41052'	or
+substr(dx,1,5)=	'41060'	or
+substr(dx,1,5)=	'41061'	or
+substr(dx,1,5)=	'41062'	or
+substr(dx,1,5)=	'41070'	or
+substr(dx,1,5)=	'41071'	or
+substr(dx,1,5)=	'41072'	or
+substr(dx,1,5)=	'41080'	or
+substr(dx,1,5)=	'41081'	or
+substr(dx,1,5)=	'41082'	or
+substr(dx,1,5)=	'41090'	or
+substr(dx,1,5)=	'41091'	or
+substr(dx,1,5)=	'41092'	or
+substr(dx,1,4)=	'4110'	or
+substr(dx,1,4)=	'4111'	or
+substr(dx,1,5)=	'41181'	or
+substr(dx,1,5)=	'41189'	or
+substr(dx,1,4)=	'412'	or
+substr(dx,1,4)=	'4130'	or
+substr(dx,1,4)=	'4131'	or
+substr(dx,1,4)=	'4139'	or
+substr(dx,1,5)=	'41400'	or
+substr(dx,1,5)=	'41401'	or
+substr(dx,1,5)=	'41402'	or
+substr(dx,1,5)=	'41403'	or
+substr(dx,1,5)=	'41404'	or
+substr(dx,1,5)=	'41405'	or
+substr(dx,1,5)=	'41406'	or
+substr(dx,1,5)=	'41407'	or
+substr(dx,1,5)=	'41410'	or
+substr(dx,1,5)=	'41411'	or
+substr(dx,1,5)=	'41412'	or
+substr(dx,1,5)=	'41419'	or
+substr(dx,1,4)=	'4142'	or
+substr(dx,1,4)=	'4143'	or
+substr(dx,1,4)=	'4148'	or
+substr(dx,1,4)=	'4149' )
+/* ICD 10 - Ischemic Heart Disease
+substr(dx,1,4)=	'I200'	or
+substr(dx,1,4)=	'I201'	or
+substr(dx,1,4)=	'I208'	or
+substr(dx,1,4)=	'I209'	or
+substr(dx,1,5)=	'I2109'	or
+substr(dx,1,5)=	'I2111'	or
+substr(dx,1,5)=	'I2119'	or
+substr(dx,1,5)=	'I2129'	or
+substr(dx,1,4)=	'I213'	or
+substr(dx,1,4)=	'I214'	or
+substr(dx,1,4)=	'I240'	or
+substr(dx,1,4)=	'I241'	or
+substr(dx,1,4)=	'I248'	or
+substr(dx,1,5)=	'I2510'	or
+substr(dx,1,4)=	'I252'	or
+substr(dx,1,4)=	'I253'	or
+substr(dx,1,5)=	'I2541'	or
+substr(dx,1,5)=	'I2542'	or
+substr(dx,1,4)=	'I255'	or
+substr(dx,1,6)=	'I25810'	or
+substr(dx,1,6)=	'I25811'	or
+substr(dx,1,6)=	'I25812'	or
+substr(dx,1,5)=	'I2582'	or
+substr(dx,1,5)=	'I2583'	or
+substr(dx,1,5)=	'I2589'	or
+substr(dx,1,4)=	'I259'	) */
+and smi_ihd = 0
+then smi_ihd =1;
+/* ICD 9 - PVD */
+if(substr(dx,1,4)=	'4400'	or
+substr(dx,1,4)=	'4401'	or
+substr(dx,1,5)=	'44020'	or
+substr(dx,1,5)=	'44021'	or
+substr(dx,1,5)=	'44022'	or
+substr(dx,1,5)=	'44023'	or
+substr(dx,1,5)=	'44024'	or
+substr(dx,1,5)=	'44029'	or
+substr(dx,1,5)=	'44030'	or
+substr(dx,1,5)=	'44031'	or
+substr(dx,1,5)=	'44032'	or
+substr(dx,1,4)=	'4404'	or
+substr(dx,1,4)=	'4408'	or
+substr(dx,1,4)=	'4409'	or
+substr(dx,1,4)=	'4412'	or
+substr(dx,1,4)=	'4414'	or
+substr(dx,1,4)=	'4417'	or
+substr(dx,1,4)=	'4419'	or
+substr(dx,1,4)=	'4431'	or
+substr(dx,1,5)=	'44321'	or
+substr(dx,1,5)=	'44322'	or
+substr(dx,1,5)=	'44323'	or
+substr(dx,1,5)=	'44324'	or
+substr(dx,1,5)=	'44329'	or
+substr(dx,1,5)=	'44381'	or
+substr(dx,1,5)=	'44382'	or
+substr(dx,1,5)=	'44389'	or
+substr(dx,1,4)=	'4439'	or
+substr(dx,1,4)=	'4471'	or
+substr(dx,1,4)=	'5571'	or
+substr(dx,1,4)=	'5579'	or
+substr(dx,1,4)=	'V434' )
+/* ICD 10 - PVD 
+substr(dx,1,4)=	'I700'	or
+substr(dx,1,4)=	'I701'	or
+substr(dx,1,6)=	'I70209'	or
+substr(dx,1,6)=	'I70219'	or
+substr(dx,1,6)=	'I70229'	or
+substr(dx,1,5)=	'I7025' 	or
+substr(dx,1,6)=	'I70269'	or
+substr(dx,1,6)=	'I70299'	or
+substr(dx,1,6)=	'I70399'	or
+substr(dx,1,6)=	'I70499'	or
+substr(dx,1,6)=	'I70599'	or
+substr(dx,1,4)=	'I708'	or
+substr(dx,1,5)=	'I7090'	or
+substr(dx,1,5)=	'I7091'	or
+substr(dx,1,5)=	'I7092'	or
+substr(dx,1,4)=	'I712'	or
+substr(dx,1,4)=	'I714'	or
+substr(dx,1,4)=	'I716'	or
+substr(dx,1,4)=	'I719'	or
+substr(dx,1,4)=	'I731'	or
+substr(dx,1,5)=	'I7381'	or
+substr(dx,1,5)=	'I7389'	or
+substr(dx,1,4)=	'I739'	or
+substr(dx,1,4)=	'I771'	or
+substr(dx,1,5)=	'I7771'	or
+substr(dx,1,5)=	'I7772'	or
+substr(dx,1,5)=	'I7773'	or
+substr(dx,1,5)=	'I7774'	or
+substr(dx,1,5)=	'I7775'	or
+substr(dx,1,5)=	'I7776'	or
+substr(dx,1,5)=	'I7777'	or
+substr(dx,1,5)=	'I7779'	or
+substr(dx,1,4)=	'I798'	or
+substr(dx,1,4)=	'K551'	or
+substr(dx,1,4)=	'K559'	or
+substr(dx,1,6)=	'Z95828') */
+and smi_pvd = 0
+then smi_pvd = 1;
+/* ICD 9 - Renal */
+if(substr(dx,1,5)=	'40311'	or
+substr(dx,1,5)=	'40412'	or
+substr(dx,1,5)=	'40492'	or
+substr(dx,1,4)=	'5851'	or
+substr(dx,1,4)=	'5852'	or
+substr(dx,1,4)=	'5853'	or
+substr(dx,1,4)=	'5854'	or
+substr(dx,1,4)=	'5855'	or
+substr(dx,1,4)=	'5856'	or
+substr(dx,1,4)=	'5859'	or
+substr(dx,1,3)=	'586'	or
+substr(dx,1,4)=	'V420'	or
+substr(dx,1,5)=	'V4511'	or
+substr(dx,1,5)=	'V4512'	or
+substr(dx,1,4)=	'V560'	or
+substr(dx,1,4)=	'V568'	)
+/* ICD 10 - Renal 
+substr(dx,1,4)=	'I120'	or
+substr(dx,1,5)=	'I1311'	or
+substr(dx,1,4)=	'N181'	or
+substr(dx,1,4)=	'N182'	or
+substr(dx,1,4)=	'N183'	or
+substr(dx,1,4)=	'N184'	or
+substr(dx,1,4)=	'N185'	or
+substr(dx,1,4)=	'N186'	or
+substr(dx,1,4)=	'N189'	or
+substr(dx,1,3)=	'N19'	or
+substr(dx,1,5)=	'Z4931'	or
+substr(dx,1,5)=	'Z4932'	or
+substr(dx,1,5)=	'Z9115'	or
+substr(dx,1,4)=	'Z940'	or
+substr(dx,1,4)=	'Z992'	) */
+and smi_rd = 0
+then smi_rd = 1;
+
+/* ICD 9 - Dartmouth Cancer */
+
+if(substr(dx,1,4)= '1500' or
+substr(dx,1,4)=	'1501' or
+substr(dx,1,4)=	'1502' or
+substr(dx,1,4)=	'1503' or
+substr(dx,1,4)=	'1504' or
+substr(dx,1,4)=	'1505' or
+substr(dx,1,4)=	'1508' or
+substr(dx,1,4)=	'1509' or
+substr(dx,1,4)=	'1510' or
+substr(dx,1,4)=	'1511' or
+substr(dx,1,4)=	'1512' or
+substr(dx,1,4)=	'1513' or
+substr(dx,1,4)=	'1514' or
+substr(dx,1,4)=	'1515' or
+substr(dx,1,4)=	'1516' or
+substr(dx,1,4)=	'1518' or
+substr(dx,1,4)=	'1519' or
+substr(dx,1,4)=	'1550' or
+substr(dx,1,4)=	'1551' or
+substr(dx,1,4)=	'1552' or
+substr(dx,1,4)=	'1570' or
+substr(dx,1,4)=	'1571' or
+substr(dx,1,4)=	'1572' or
+substr(dx,1,4)=	'1573' or
+substr(dx,1,4)=	'1574' or
+substr(dx,1,4)=	'1578' or
+substr(dx,1,4)=	'1579' or
+substr(dx,1,4)=	'1580' or
+substr(dx,1,4)=	'1588' or
+substr(dx,1,4)=	'1589' or
+substr(dx,1,4)=	'1620' or
+substr(dx,1,4)=	'1622' or
+substr(dx,1,4)=	'1623' or
+substr(dx,1,4)=	'1624' or
+substr(dx,1,4)=	'1625' or
+substr(dx,1,4)=	'1628' or
+substr(dx,1,4)=	'1629' or
+substr(dx,1,4)=	'1630' or
+substr(dx,1,4)=	'1631' or
+substr(dx,1,4)=	'1638' or
+substr(dx,1,4)=	'1639' or
+substr(dx,1,4)=	'1830' or
+substr(dx,1,4)=	'1832' or
+substr(dx,1,4)=	'1833' or
+substr(dx,1,4)=	'1834' or
+substr(dx,1,4)=	'1835' or
+substr(dx,1,4)=	'1838' or
+substr(dx,1,4)=	'1839' or
+substr(dx,1,4)=	'1910' or
+substr(dx,1,4)=	'1911' or
+substr(dx,1,4)=	'1912' or
+substr(dx,1,4)=	'1913' or
+substr(dx,1,4)=	'1914' or
+substr(dx,1,4)=	'1915' or
+substr(dx,1,4)=	'1916' or
+substr(dx,1,4)=	'1917' or
+substr(dx,1,4)=	'1918' or
+substr(dx,1,4)=	'1919' or
+substr(dx,1,4)=	'2890' or
+substr(dx,1,5)=	'20400'  or
+substr(dx,1,5)=	'20410'  or
+substr(dx,1,5)=	'20420'  or
+substr(dx,1,5)=	'20480'  or
+substr(dx,1,5)=	'20490'  or
+substr(dx,1,5)=	'20500'  or
+substr(dx,1,5)=	'20510'  or
+substr(dx,1,5)=	'20520'  or
+substr(dx,1,5)=	'20530'  or
+substr(dx,1,5)=	'20580'  or
+substr(dx,1,5)=	'20590'  or
+substr(dx,1,5)=	'20600'  or
+substr(dx,1,5)=	'20610'  or
+substr(dx,1,5)=	'20620'  or
+substr(dx,1,5)=	'20680'  or
+substr(dx,1,5)=	'20690'  or
+substr(dx,1,5)=	'20700'  or
+substr(dx,1,5)=	'20710'  or
+substr(dx,1,5)=	'20720'  or
+substr(dx,1,5)=	'20780'  or
+substr(dx,1,5)=	'20800'  or
+substr(dx,1,5)=	'20810'  or
+substr(dx,1,5)=	'20820'  or
+substr(dx,1,5)=	'20880'  or
+substr(dx,1,4)=	'1960'   or
+substr(dx,1,4)=	'1961'   or
+substr(dx,1,4)=	'1962'   or
+substr(dx,1,4)=	'1963'   or
+substr(dx,1,4)=	'1965'   or
+substr(dx,1,4)=	'1966'   or
+substr(dx,1,4)=	'1968'   or
+substr(dx,1,4)=	'1969'   or
+substr(dx,1,4)=	'1970'   or
+substr(dx,1,4)=	'1971'   or
+substr(dx,1,4)=	'1972'   or
+substr(dx,1,4)=	'1973'   or
+substr(dx,1,4)=	'1974'   or
+substr(dx,1,4)=	'1975'   or
+substr(dx,1,4)=	'1976'   or
+substr(dx,1,4)=	'1977'   or
+substr(dx,1,4)=	'1978'   or
+substr(dx,1,4)=	'1980'   or
+substr(dx,1,4)=	'1981'   or
+substr(dx,1,4)=	'1982'   or
+substr(dx,1,4)=	'1983'   or
+substr(dx,1,4)=	'1984'   or
+substr(dx,1,4)=	'1985'   or
+substr(dx,1,4)=	'1986'   or
+substr(dx,1,4)=	'1987'   or
+substr(dx,1,4)=	'1990'   or
+substr(dx,1,4)=	'1991'   or
+substr(dx,1,5)=	'19881'  or
+substr(dx,1,5)=	'19882'  or
+substr(dx,1,5)=	'19889' )
+and dart_cancer = 0
+then dart_cancer = 1;
+
+/* ICD 9 - Dartmouth COPD */
+if(substr(dx,1,3)='494'  or
+substr(dx,1,3)='496'     or
+substr(dx,1,3)='501'     or
+substr(dx,1,3)='515'     or
+substr(dx,1,4)='4911'    or
+substr(dx,1,4)='4918'    or
+substr(dx,1,4)='4919'    or
+substr(dx,1,4)='4928'    or
+substr(dx,1,4)='4940'    or
+substr(dx,1,4)='4941'    or
+substr(dx,1,4)='5064'    or
+substr(dx,1,5)='49120'   or
+substr(dx,1,5)='49121'   or
+substr(dx,1,5)='49122'   or
+substr(dx,1,5)='49310'   or
+substr(dx,1,5)='49311'   or
+substr(dx,1,5)='49312'   or
+substr(dx,1,5)='49320'   or
+substr(dx,1,5)='49321'   or
+substr(dx,1,5)='49322'   or
+substr(dx,1,5)='49390'   or
+substr(dx,1,5)='49391'   or
+substr(dx,1,5)='49392'  )
+and dart_copd = 0
+then dart_copd = 1;
+
+* ICD 9 - Dartmouth CAD;
+if(substr(dx,1,3)='412'   or
+substr(dx,1,3)='411'      or
+substr(dx,1,4)='4118'     or
+substr(dx,1,4)='4130'     or
+substr(dx,1,4)='4139'     or
+substr(dx,1,4)='4140'     or
+substr(dx,1,4)='4148'     or
+substr(dx,1,4)='4149'     or
+substr(dx,1,5)='41181'    or
+substr(dx,1,5)='41189'    or
+substr(dx,1,5)='41400'    or
+substr(dx,1,5)='41401'    or
+substr(dx,1,5)='41402'    or
+substr(dx,1,5)='41403'    or
+substr(dx,1,5)='41404'    or
+substr(dx,1,5)='41405'    or
+substr(dx,1,5)='41406'    or
+substr(dx,1,5)='41407'    ) 
+and dart_cad = 0
+then dart_cad = 1;
+
+* ICD 9 - CHF;
+if(substr(dx,1,4)='4280'   or
+substr(dx,1,4)='4281'      or
+substr(dx,1,4)='4282'      or
+substr(dx,1,4)='4283'      or
+substr(dx,1,4)='4284'      or
+substr(dx,1,4)='4289'      or
+substr(dx,1,5)='40201'     or
+substr(dx,1,5)='40211'     or
+substr(dx,1,5)='40291'     or
+substr(dx,1,5)='39891'     or
+substr(dx,1,5)='40401'     or
+substr(dx,1,5)='40403'     or
+substr(dx,1,5)='40411'     or
+substr(dx,1,5)='40491'     or
+substr(dx,1,5)='40493'     )
+and dart_chf = 0
+then dart_chf = 1;
+
+* ICD 9 - Dartmouth PVD ;
+if(substr(dx,1,4)='4400'    or
+substr(dx,1,4)='4401'       or
+substr(dx,1,4)='4403'       or
+substr(dx,1,4)='4408'       or
+substr(dx,1,4)='4409'       or
+substr(dx,1,4)='4410'       or
+substr(dx,1,4)='4411'       or
+substr(dx,1,4)='4412'       or
+substr(dx,1,4)='4413'       or
+substr(dx,1,4)='4414'       or
+substr(dx,1,4)='4415'       or
+substr(dx,1,4)='4416'       or
+substr(dx,1,4)='4417'       or
+substr(dx,1,4)='4419'       or
+substr(dx,1,4)='4439'       or
+substr(dx,1,5)='44020'      or
+substr(dx,1,5)='44021'      or
+substr(dx,1,5)='44022'      or
+substr(dx,1,5)='44023'      or
+substr(dx,1,5)='44024'      or
+substr(dx,1,5)='44029'    )
+and dart_pvd = 0
+then dart_pvd = 1;
+
+* ICD 9 - Dartmouth Severe Chronic Liver Disease ;
+
+if(substr(dx,1,4)='5712' or
+substr(dx,1,4)='5715'    or
+substr(dx,1,4)='5716'    or
+substr(dx,1,4)='5723'  )
+and dart_cld = 0
+then dart_cld = 1;
+
+* ICD 9 - Dartmouth Diabetes w/End Organ Damage ;
+if(substr(dx,1,5)='25040'   or
+substr(dx,1,5)='25041'      or
+substr(dx,1,5)='25042'      or
+substr(dx,1,5)='25043'      or
+substr(dx,1,5)='25050'      or
+substr(dx,1,5)='25051'      or
+substr(dx,1,5)='25052'      or
+substr(dx,1,5)='25053'      or
+substr(dx,1,5)='25060'      or
+substr(dx,1,5)='25061'      or
+substr(dx,1,5)='25062'      or
+substr(dx,1,5)='25063'      or
+substr(dx,1,5)='25070'      or
+substr(dx,1,5)='25071'      or
+substr(dx,1,5)='25072'      or
+substr(dx,1,5)='25073'      or
+substr(dx,1,5)='25090'      or
+substr(dx,1,5)='25091'      or
+substr(dx,1,5)='25092'      or
+substr(dx,1,5)='25093'      or
+substr(dx,1,4)='3572'       or
+substr(dx,1,5)='36641'      or
+substr(dx,1,5)='36201'      or
+substr(dx,1,5)='36202' )
+and dart_diab = 0
+then dart_diab = 1;
+
+* ICD 9 - Dartmouth Renal Disease ;
+if(substr(dx,1,5)='40301'   or
+substr(dx,1,5)='40311'      or
+substr(dx,1,5)='40391'      or
+substr(dx,1,3)='585'        or
+substr(dx,1,4)='V451'       or
+substr(dx,1,4)='V560'       or
+substr(dx,1,4)='V568'  )
+and dart_renal = 0
+then dart_renal = 1;
+
+* ICD 9 - Dartmouth Dementia;
+if(substr(dx,1,4)='2900'     or
+substr(dx,1,4)='2903'        or
+substr(dx,1,4)='2908'        or
+substr(dx,1,4)='2909'        or
+substr(dx,1,4)='2940'        or
+substr(dx,1,4)='2941'        or
+substr(dx,1,4)='2948'        or
+substr(dx,1,4)='2949'        or
+substr(dx,1,4)='3310'        or
+substr(dx,1,4)='3312'        or
+substr(dx,1,5)='29101'       or
+substr(dx,1,5)='29011'       or
+substr(dx,1,5)='29013'       or
+substr(dx,1,5)='29020'       or
+substr(dx,1,5)='29021'       or
+substr(dx,1,5)='29040'       or
+substr(dx,1,5)='29041'       or
+substr(dx,1,5)='29042'       or
+substr(dx,1,5)='29043'       or
+substr(dx,1,5)='29410'       or
+substr(dx,1,5)='29411'       or
+substr(dx,1,3)='797'	)
+and dart_dem = 0
+then dart_dem = 1;
+
+end;
+run;
+
+
+/*proc freq data=combined; tables dx_code; run;
+
+proc export data=combined outfile="\\home\users$\rahmao03\Documents\HoPe Project\encounter_9m.dta" replace; run;
+*/
+
+proc sql;
+create table criteria as 
+select distinct mrn,
+sum(smi_dem) as com_sdem,
+sum(smi_cancer) as com_scancer,
+sum(smi_esrd) as com_sesrd,
+sum(smi_chf) as com_schf,
+sum(smi_copd) as com_scopd,
+sum(smi_dia) as com_sdia,
+sum(smi_ald) as com_sald,
+sum(smi_hiv) as com_shiv,
+sum(smi_als) as com_sals,
+sum(smi_hip) as com_ship,
+sum(smi_ihd) as com_sihd,
+sum(smi_pvd) as com_spvd,
+sum(smi_rd) as com_srd,
+sum(dart_cancer) as com_dcancer,
+sum(dart_copd) as com_dcopd,
+sum(dart_cad)  as com_dcad,
+sum(dart_chf)  as com_dchf,
+sum(dart_pvd)  as com_dpvd,
+sum(dart_cld)  as com_dcld,
+sum(dart_diab) as com_ddiab,
+sum(dart_renal) as com_drenal,
+sum(dart_dem) as com_ddem
+from combined
+group by mrn;
+quit;
+
+data criteria;
+set criteria;
+smi_dem= 0;
+smi_cancer = 0;
+smi_esrd= 0;
+smi_chf = 0;
+smi_copd = 0;
+smi_dia = 0;
+smi_ald = 0;
+smi_hiv = 0;
+smi_als = 0;
+smi_hip = 0;
+smi_ihd = 0;
+smi_pvd = 0;
+smi_rd = 0;
+dart_cancer = 0;
+dart_copd = 0;
+dart_cad = 0;
+dart_chf = 0;
+dart_pvd = 0;
+dart_cld = 0;
+dart_diab = 0;
+dart_renal = 0;
+dart_dem = 0;
+run;
+
+data criteria1;
+set criteria;
+array list_com com_scancer--com_ddem;
+array list_com_bin smi_cancer--dart_dem;
+
+do over list_com;
+list_com_bin=0;
+if list_com>0 then do;
+list_com_bin = 1;
+end;
+end;
+if com_sdem>=1 then smi_dem = 1;
+if com_sdem=1 then ind_dem=1;
+smi_diab_comp = 0;
+if smi_dia=1 and smi_ihd=1 then smi_diab_comp=1;
+if smi_dia=1 and smi_pvd=1 then smi_diab_comp=1;
+if smi_dia=1 and smi_rd=1 then smi_diab_comp=1;
+any_smi = smi_dem + smi_cancer + smi_esrd + smi_chf + smi_copd + smi_diab_comp + smi_ald + smi_hiv
++ smi_als + smi_hip;
+any_dart=dart_cancer +dart_copd +dart_cad +dart_chf + dart_pvd + dart_cld + dart_diab + dart_renal + dart_dem ;
+ind_multi=any_dart>=3;
+run;
+
+proc freq data=criteria1; tables ind_multi; run;
+
+data criteria1a; 
+set criteria1;
+where any_smi>0 or any_dart>2;
+run;
+
+data  hope.criteria_met_dx; /* Our final cohort - Comprehensive DX list for first 9months of 2015*/
+set criteria1a;
+where any_smi>0 or any_dart>2;
+smi_qual = 0;
+dart_qual = 0;
+both_qual = 0;
+if any_smi > 0 and any_dart<3 then smi_qual = 1; 
+if any_dart>2 and any_smi = 0 then dart_qual = 1;
+if any_smi>0 and any_dart>2 then both_qual = 1;
+if smi_qual = 0 and dart_qual=0 and both_qual=0 and ind_dem = 1 then smi_qual = 1; /* flagging single dementia diagnosis as smi qualified dementia */
+label smi_dem = "SMI - Dementia";
+label smi_cancer = "SMI - Cancer";
+label smi_esrd = "SMI - End Stage Renal Disease";
+label smi_chf = "SMI - Congestive Heart Failure";
+label smi_copd = "SMI - Chronic Obstructive Pulmonary Disease";
+label smi_diab_comp = "SMI - Diabetes w/Complications";
+label smi_ald = "SMI - Advanced Liver Disease";
+label smi_hiv = "SMI - HIV";
+label smi_als = "SMI - ALS";
+label smi_hip = "SMI - Hip Fracture";
+label dart_cancer = "Dartmouth - Cancer";
+label dart_copd = "Dartmouth - Chronic Obstructive Pulmonary Disease";
+label dart_cad = "Dartmouth - Coronary Artery Disease";
+label dart_chf = "Dartmouth - Congestive Heart Failure";
+label dart_pvd = "Dartmouth - Peripheral Vascular Disease";
+label dart_cld = "Dartmouth - Chronic Liver Disease";
+label dart_diab = "Dartmouth - Diabetes w/End Organ Damage";
+label dart_renal = "Dartmouth - Renal Failure";
+label dart_dem = "Dartmouth - Dementia";
+run;
+
+H="Identifying index visit"
+data criteria2;
+set criteria1a;
+where any_smi>0 or any_dart>2;
+smi_qual = 0;
+dart_qual = 0;
+both_qual = 0;
+if any_smi > 0 and any_dart<3 then smi_qual = 1; 
+if any_dart>2 and any_smi = 0 then dart_qual = 1;
+if any_smi>0 and any_dart>2 then both_qual = 1;
+if smi_qual = 0 and dart_qual=0 and both_qual=0 and ind_dem = 1 then smi_qual = 1; /* flagging single dementia diagnosis as smi qualified dementia */
+run;
+
+proc export data=hope.criteria_met_dx outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\data\criteria2.dta" replace; run;
+
+proc freq data=criteria2; tables smi_qual dart_qual both_qual; run;
+
+/*Finding the index diagnosis date */
+
+
+proc sort data=combined; by mrn date; run;
+proc sort data=combined out=combineda (drop=smi_rd--dart_dem) nodupkey; by mrn smi_dem--smi_hip; run;  /*ensure that multiple dx_codes that map to the same smi/morbidity do not get counted more than once*/
+proc sort data=combined out=combined2 (drop=smi_dem--smi_pvd) nodupkey; by mrn dart_cancer--dart_dem; run; /* Combineda = unique smi per person, combined2 = unique comorbidity per person */
+
+data combined1a;
+set combineda combined2;
+array change smi_dem--dart_dem;
+do over change;
+if change = . then change = 0;
+end;
+run;
+
+proc sql; /*collapsing utilization dataset so that multiple dx per claim show up in same row */
+create table combined1 as 
+select distinct mrn, date,
+sum(smi_dem) as smi_dem,
+sum(smi_cancer) as smi_cancer,
+sum(smi_esrd) as smi_esrd,
+sum(smi_chf) as smi_chf,
+sum(smi_copd) as smi_copd,
+sum(smi_dia) as smi_dia,
+sum(smi_ald) as smi_ald,
+sum(smi_hiv) as smi_hiv,
+sum(smi_als) as smi_als,
+sum(smi_hip) as smi_hip,
+sum(dart_cancer) as dart_cancer,
+sum(dart_copd) as dart_copd,
+sum(dart_cad)  as dart_cad,
+sum(dart_chf)  as dart_chf,
+sum(dart_pvd)  as dart_pvd,
+sum(dart_cld)  as dart_cld,
+sum(dart_diab) as dart_diab,
+sum(dart_renal) as dart_renal,
+sum(dart_dem) as dart_dem
+from combined1a
+group by mrn, date;
+quit;
+
+data combined1;
+set combined1;
+array smi_ind smi_dem--dart_dem;
+do over smi_ind;
+if smi_ind>0 then smi_ind =1;
+end;
+any_smi = smi_dem + smi_cancer + smi_esrd + smi_chf + smi_copd + smi_dia + smi_ald + smi_hiv
++ smi_als + smi_hip;
+any_dart=dart_cancer +dart_copd +dart_cad +dart_chf + dart_pvd + dart_cld + dart_diab + dart_renal + dart_dem ;
+run;
+
+proc freq data=combined1; tables any_dart any_smi; run;
+
+data combined1; /*Any billing with a smi condition or 1+ dartmouth condition */
+set combined1;
+where any_smi>0 or any_dart>0;
+run;
+
+/* Finding first claim for SMI only folks */
+
+data smi_only_bills;
+set combined1;
+where any_smi>0;
+run;
+
+data smi_only;
+set criteria2;
+where smi_qual = 1;
+run;
+
+proc sql;
+create table final_smi_only as select a.*, b.mrn
+from smi_only_bills a
+inner join smi_only b
+on a.mrn = b.mrn;
+quit;
+
+proc sort data=final_smi_only nodupkey; by mrn date; run;
+proc sort data=final_smi_only nodupkey; by mrn; run; /* Index date for SMI only folks */
+
+proc freq data=final_smi_only; tables any_smi; run;
+
+/* Finding 3rd distinct dx for Dartmouth only folks */
+
+data dart_only_bills;
+set combined1;
+where any_dart>0;
+run;
+
+data dart_only_bills; /* create running sum variable that increments based on number of comorbidity diagnosed that visit */
+set dart_only_bills;
+by mrn;
+cnt + any_dart;
+if first.mrn then cnt = any_dart;
+run;
+
+data dart_only_bills;
+set dart_only_bills;
+where cnt>=3;
+run;
+
+proc sort data=dart_only_bills; by mrn cnt; run;
+proc sort data=dart_only_bills nodupkey; by mrn; run;
+
+data dart_only;
+set criteria2;
+where dart_qual=1;
+run;
+
+proc sql; /* Index date for 3+ dart only */
+create table final_dart_only as select a.*, b.mrn
+from dart_only_bills a
+inner join dart_only b
+on a.mrn = b.mrn;
+quit;
+
+
+/* determine if smi comes before 3rd dartmouth for people who qualify on both */
+
+data both_only;
+set criteria2;
+where both_qual = 1;
+run;
+
+proc sql;
+create table both_bills as select a.*, b.cnt
+from combined1 a
+left join dart_only_bills b
+on a.mrn=b.mrn and a.date=b.date;
+quit;
+
+proc freq data=both_bills; tables cnt; run;
+
+proc sql;
+create table both_flag as select a.*,b.both_qual
+from both_bills a
+left join both_only b
+on a.mrn=b.mrn;
+quit;
+
+data both_flag;
+set both_flag;
+where both_qual = 1;
+run;
+
+proc sort data=both_flag; by mrn date; run; 
+*proc sort data=both_flag out=test nodupkey; *by mrn; *run; 
+
+
+data both_flag;
+set both_flag;
+where any_smi>0 or cnt>=3;
+run;
+
+
+data both_flag;
+set both_flag;
+by mrn;
+*cnt_2 + 1;
+*if first.mrn then cnt_2 = 1;
+run;
+
+data both_flag;
+set both_flag;
+index = 0;
+if cnt<3 and any_smi = 1 then index=1;
+run;
+
+
+data final_both_only;
+set both_flag;
+where index=1 or cnt>=3;
+run;
+
+proc sort data=final_both_only nodupkey; by mrn date; run;
+proc sort data=final_both_only nodupkey; by mrn; run;
+
+
+data final1 (drop = both_qual cnt index);
+set final_smi_only final_dart_only final_both_only;
+run;
+
+proc sql;
+create table final as select a.*, b.smi_qual, b.dart_qual, b.both_qual
+from final1 a
+inner join criteria2 b
+on a.mrn=b.mrn;
+quit;
+
+
+/*
+
+proc sort data=combined1 nodupkey; by mrn date; run;
+
+
+proc sort data=combined1 nodupkey; by mrn; run; First date a smi or dartmouth is met...includes people with < 3 dart conditions
+proc sql; Filtering specifically for our cohort
+create table final as select a.*, b.mrn
+from combined1 a
+inner join hope.criteria_met_9m b
+on a.mrn = b.mrn;
+quit;
+
+*/
+
+data hope.criteria_met_9m (drop = smi_rd smi_ihd smi_pvd ICD9_CODE dx_code);
+set final;
+both_qual2 = 0;
+if both_qual = 1 and any_smi>=1 and any_dart=0 then smi_qual = 1;
+if both_qual = 1 and any_smi=0 and any_dart>0 then dart_qual = 1;
+if both_qual = 1 and any_smi>0 and any_dart>0 then both_qual2=1;
+label smi_dem = "SMI - Dementia";
+label smi_cancer = "SMI - Cancer";
+label smi_esrd = "SMI - End Stage Renal Disease";
+label smi_chf = "SMI - Congestive Heart Failure";
+label smi_copd = "SMI - Chronic Obstructive Pulmonary Disease";
+label smi_dia = "SMI - Diabetes w/Complications";
+label smi_ald = "SMI - Advanced Liver Disease";
+label smi_hiv = "SMI - HIV";
+label smi_als = "SMI - ALS";
+label smi_hip = "SMI - Hip Fracture";
+label dart_cancer = "Dartmouth - Cancer";
+label dart_copd = "Dartmouth - Chronic Obstructive Pulmonary Disease";
+label dart_cad = "Dartmouth - Coronary Artery Disease";
+label dart_chf = "Dartmouth - Congestive Heart Failure";
+label dart_pvd = "Dartmouth - Peripheral Vascular Disease";
+label dart_cld = "Dartmouth - Chronic Liver Disease";
+label dart_diab = "Dartmouth - Diabetes w/End Organ Damage";
+label dart_renal = "Dartmouth - Renal Failure";
+label dart_dem = "Dartmouth - Dementia";
+run;
+
+proc freq data=hope.criteria_met_9m; tables smi_qual dart_qual both_qual2; run;
+
+/* proc export data=work.unique_mrn outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\evan\unique_mrn_9m.csv" dbms=csv replace; run; */
+proc export data=hope.criteria_met_9m outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_9m.dta" replace; run;
+
+data hope.index_date (keep=mrn index_date smi_qual dart_qual both_qual2);
+set hope.criteria_met_9m (rename=(date = index_date));
+run;
+
+
+H="1 year look back for SMI/MM"
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\problemlist.csv" out=problemlist dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17.xlsx" out=demographics dbms=xlsx replace; 
+	sheet="Demographics"; 
+	getnames=YES;
+	run;
+
+proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+data cohort;
+set hope.index_date;
+run;
+
+data util;
+set util;
+mrn1 = input(mrn, best12.);
+date = input(encounter_date, mmddyy10.);
+format date date10.;
+run;
+
+proc sql;
+create table sample as select a.*, b.*
+from cohort a
+inner join util b
+on a.mrn=b.mrn1 and 0<= a.index_date - b.date<=365;
+quit;
+
+/* Check 1 year prior utilization for SMI and Dartmouth Morbidities */
+
+data combined;
+set sample;
+dx_code = compress(ICD9_CODE, .);
+smi_dem= 0;
+smi_cancer = 0;
+smi_esrd= 0;
+smi_chf = 0;
+smi_copd = 0;
+smi_dia = 0;
+smi_ald = 0;
+smi_hiv = 0;
+smi_als = 0;
+smi_hip = 0;
+smi_rd = 0;
+smi_ihd = 0;
+smi_pvd = 0;
+dart_cancer = 0;
+dart_copd = 0;
+dart_cad = 0;
+dart_chf = 0;
+dart_pvd = 0;
+dart_cld = 0;
+dart_diab = 0;
+dart_renal = 0;
+dart_dem = 0;
+array dx dx_code;
+do over dx;
+/*SMI - Dementia ICD-9 */
+if(substr(dx,1,4)='3310' or
+   substr(dx,1,4)='3311' or
+   substr(dx,1,4)='3312' or
+   substr(dx,1,4)='2900' or
+   substr(dx,1,4)='2901' or
+   substr(dx,1,4)='2902' or
+   substr(dx,1,4)='2903' or
+   substr(dx,1,4)='2912' or
+   substr(dx,1,4)='2948' or
+   substr(dx,1,4)='2949' or
+   substr(dx,1,5)='29410' or
+   substr(dx,1,5)='29411' or
+   substr(dx,1,5)='29040' or
+   substr(dx,1,5)='29041' or
+   substr(dx,1,5)='29042' or
+   substr(dx,1,5)='29043' )
+  /* SMI - Dementia ICD-10
+   substr(dx,1,4)='G309' or
+   substr(dx,1,5)='G3101' or
+   substr(dx,1,4)='G311' or
+   substr(dx,1,5)='F0390' or
+   substr(dx,1,3)='F05' or
+   substr(dx,1,5)='F1027' or
+   substr(dx,1,4)='F060' or
+   substr(dx,1,4)='F068' or
+   substr(dx,1,5)='F0280' or
+   substr(dx,1,5)='F0281' or
+   substr(dx,1,5)='F0150' or 
+   substr(dx,1,5)='F0151') */
+   and smi_dem=0 
+   then smi_dem=1;
+/* SMI - Cancer */
+if(substr(dx,1,3)='196' or
+   substr(dx,1,3)='197' or
+   substr(dx,1,3)='198' or
+   substr(dx,1,3)='199' or
+   substr(dx,1,3)='204' or
+   substr(dx,1,3)='205' or
+   substr(dx,1,3)='206' or
+   substr(dx,1,3)='207' or
+   substr(dx,1,3)='208' or
+   substr(dx,1,4)='1500' or
+   substr(dx,1,4)='1501' or
+   substr(dx,1,4)='1502' or
+   substr(dx,1,4)='1503' or
+   substr(dx,1,4)='1504' or
+   substr(dx,1,4)='1505' or
+   substr(dx,1,4)='1508' or
+   substr(dx,1,4)='1509' or
+   substr(dx,1,4)='1510' or
+   substr(dx,1,4)='1511' or
+   substr(dx,1,4)='1512' or
+   substr(dx,1,4)='1513' or
+   substr(dx,1,4)='1514' or
+   substr(dx,1,4)='1515' or
+   substr(dx,1,4)='1516' or
+   substr(dx,1,4)='1518' or
+   substr(dx,1,4)='1519' or
+   substr(dx,1,4)='1550' or
+   substr(dx,1,4)='1551' or
+   substr(dx,1,4)='1552' or
+   substr(dx,1,4)='1570' or
+   substr(dx,1,4)='1571' or
+   substr(dx,1,4)='1572' or
+   substr(dx,1,4)='1573' or
+   substr(dx,1,4)='1574' or
+   substr(dx,1,4)='1578' or
+   substr(dx,1,4)='1579' or
+   substr(dx,1,4)='1580' or
+   substr(dx,1,4)='1588' or
+   substr(dx,1,4)='1589' or
+   substr(dx,1,4)='1620' or
+   substr(dx,1,4)='1622' or
+   substr(dx,1,4)='1623' or
+   substr(dx,1,4)='1624' or
+   substr(dx,1,4)='1625' or
+   substr(dx,1,4)='1628' or
+   substr(dx,1,4)='1629' or
+   substr(dx,1,4)='1630' or
+   substr(dx,1,4)='1631' or
+   substr(dx,1,4)='1638' or
+   substr(dx,1,4)='1639' or
+   substr(dx,1,4)='1830' or
+   substr(dx,1,4)='1832' or
+   substr(dx,1,4)='1833' or
+   substr(dx,1,4)='1834' or
+   substr(dx,1,4)='1835' or
+   substr(dx,1,4)='1838' or
+   substr(dx,1,4)='1839' or
+   substr(dx,1,4)='1910' or
+   substr(dx,1,4)='1911' or
+   substr(dx,1,4)='1912' or
+   substr(dx,1,4)='1913' or
+   substr(dx,1,4)='1913' or
+   substr(dx,1,4)='1914' or
+   substr(dx,1,4)='1915' or
+   substr(dx,1,4)='1916' or
+   substr(dx,1,4)='1917' or
+   substr(dx,1,4)='1918' or
+   substr(dx,1,4)='1919' or
+   substr(dx,1,4)='2890' )
+   /* ICD 10 - Cancer
+substr(dx,1,4)=	'C153'	or
+substr(dx,1,4)=	'C154'	or
+substr(dx,1,4)=	'C155'	or
+substr(dx,1,4)=	'C158'	or
+substr(dx,1,4)=	'C159'	or
+substr(dx,1,4)=	'C160'	or
+substr(dx,1,4)=	'C161'	or
+substr(dx,1,4)=	'C162'	or
+substr(dx,1,4)=	'C163'	or
+substr(dx,1,4)=	'C164'	or
+substr(dx,1,4)=	'C165'	or
+substr(dx,1,4)=	'C166'	or
+substr(dx,1,4)=	'C168'	or
+substr(dx,1,4)=	'C169'	or
+substr(dx,1,4)=	'C220'	or
+substr(dx,1,4)=	'C221'	or
+substr(dx,1,4)=	'C222'	or
+substr(dx,1,4)=	'C227'	or
+substr(dx,1,4)=	'C228'	or
+substr(dx,1,4)=	'C229'	or
+substr(dx,1,4)=	'C250'	or
+substr(dx,1,4)=	'C251'	or
+substr(dx,1,4)=	'C252'	or
+substr(dx,1,4)=	'C253'	or
+substr(dx,1,4)=	'C254'	or
+substr(dx,1,4)=	'C257'	or
+substr(dx,1,4)=	'C258'	or
+substr(dx,1,4)=	'C259'	or
+substr(dx,1,3)=	'C33'	or
+substr(dx,1,5)=	'C3400'	or
+substr(dx,1,5)=	'C3410'	or
+substr(dx,1,4)=	'C342'	or
+substr(dx,1,5)=	'C3430'	or
+substr(dx,1,5)=	'C3480'	or
+substr(dx,1,5)=	'C3490'	or
+substr(dx,1,4)=	'C384'	or
+substr(dx,1,4)=	'C480'	or
+substr(dx,1,4)=	'C481'	or
+substr(dx,1,4)=	'C482'	or
+substr(dx,1,4)=	'C488'	or
+substr(dx,1,4)=	'C569'	or
+substr(dx,1,5)=	'C5700'	or
+substr(dx,1,5)=	'C5710'	or
+substr(dx,1,5)=	'C5720'	or
+substr(dx,1,4)=	'C573'	or
+substr(dx,1,4)=	'C574'	or
+substr(dx,1,4)=	'C710'	or
+substr(dx,1,4)=	'C711'	or
+substr(dx,1,4)=	'C712'	or
+substr(dx,1,4)=	'C713'	or
+substr(dx,1,4)=	'C714'	or
+substr(dx,1,4)=	'C715'	or
+substr(dx,1,4)=	'C716'	or
+substr(dx,1,4)=	'C717'	or
+substr(dx,1,4)=	'C718'	or
+substr(dx,1,4)=	'C719'	or
+substr(dx,1,4)=	'C770'	or
+substr(dx,1,4)=	'C771'	or
+substr(dx,1,4)=	'C772'	or
+substr(dx,1,4)=	'C773'	or
+substr(dx,1,4)=	'C774'	or
+substr(dx,1,4)=	'C775'	or
+substr(dx,1,4)=	'C778'	or
+substr(dx,1,4)=	'C779'	or
+substr(dx,1,5)=	'C7800'	or
+substr(dx,1,4)=	'C781'	or
+substr(dx,1,4)=	'C782'	or
+substr(dx,1,5)=	'C7839'	or
+substr(dx,1,4)=	'C784'	or
+substr(dx,1,4)=	'C785'	or
+substr(dx,1,4)=	'C786'	or
+substr(dx,1,4)=	'C787'	or
+substr(dx,1,5)=	'C7889'	or
+substr(dx,1,5)=	'C7900'	or
+substr(dx,1,5)=	'C7911'	or
+substr(dx,1,5)=	'C7919'	or
+substr(dx,1,4)=	'C792'	or
+substr(dx,1,5)=	'C7931'	or
+substr(dx,1,5)=	'C7932'	or
+substr(dx,1,5)=	'C7949'	or
+substr(dx,1,5)=	'C7951'	or
+substr(dx,1,5)=	'C7952'	or
+substr(dx,1,5)=	'C7960'	or
+substr(dx,1,5)=	'C7970'	or
+substr(dx,1,5)=	'C7981'	or
+substr(dx,1,5)=	'C7982'	or
+substr(dx,1,5)=	'C7989'	or
+substr(dx,1,4)=	'C800'	or
+substr(dx,1,4)=	'C801'	or
+substr(dx,1,4)=	'C802'	or
+substr(dx,1,5)=	'C9100'	or
+substr(dx,1,5)=	'C9101'	or
+substr(dx,1,5)=	'C9102'	or
+substr(dx,1,5)=	'C9110'	or
+substr(dx,1,5)=	'C9111'	or
+substr(dx,1,5)=	'C9112'	or
+substr(dx,1,5)=	'C9190'	or
+substr(dx,1,5)=	'C9191'	or
+substr(dx,1,5)=	'C9192'	or
+substr(dx,1,5)=	'C91Z0'	or
+substr(dx,1,5)=	'C91Z1'	or
+substr(dx,1,5)=	'C91Z2'	or
+substr(dx,1,5)=	'C9200'	or
+substr(dx,1,5)=	'C9201'	or
+substr(dx,1,5)=	'C9202'	or
+substr(dx,1,5)=	'C9210'	or
+substr(dx,1,5)=	'C9211'	or
+substr(dx,1,5)=	'C9212'	or
+substr(dx,1,5)=	'C9220'	or
+substr(dx,1,5)=	'C9221'	or
+substr(dx,1,5)=	'C9222'	or
+substr(dx,1,5)=	'C9230'	or
+substr(dx,1,5)=	'C9231'	or
+substr(dx,1,5)=	'C9232'	or
+substr(dx,1,5)=	'C9240'	or
+substr(dx,1,5)=	'C9241'	or
+substr(dx,1,5)=	'C9242'	or
+substr(dx,1,5)=	'C9250'	or
+substr(dx,1,5)=	'C9251'	or
+substr(dx,1,5)=	'C9252'	or
+substr(dx,1,5)=	'C9290'	or
+substr(dx,1,5)=	'C9291'	or
+substr(dx,1,5)=	'C9292'	or
+substr(dx,1,5)=	'C92Z0'	or
+substr(dx,1,5)=	'C92Z1'	or
+substr(dx,1,5)=	'C92Z2'	or
+substr(dx,1,5)=	'C9300'	or
+substr(dx,1,5)=	'C9301'	or
+substr(dx,1,5)=	'C9302'	or
+substr(dx,1,5)=	'C9310'	or
+substr(dx,1,5)=	'C9311'	or
+substr(dx,1,5)=	'C9312'	or
+substr(dx,1,5)=	'C9390'	or
+substr(dx,1,5)=	'C9391'	or
+substr(dx,1,5)=	'C9392'	or
+substr(dx,1,5)=	'C93Z0'	or
+substr(dx,1,5)=	'C93Z1'	or
+substr(dx,1,5)=	'C93Z2'	or
+substr(dx,1,5)=	'C9400'	or
+substr(dx,1,5)=	'C9401'	or
+substr(dx,1,5)=	'C9402'	or
+substr(dx,1,5)=	'C9420'	or
+substr(dx,1,5)=	'C9421'	or
+substr(dx,1,5)=	'C9422'	or
+substr(dx,1,5)=	'C9430'	or
+substr(dx,1,5)=	'C9431'	or
+substr(dx,1,5)=	'C9432'	or
+substr(dx,1,5)=	'C9480'	or
+substr(dx,1,5)=	'C9481'	or
+substr(dx,1,5)=	'C9482'	or
+substr(dx,1,5)=	'C9500'	or
+substr(dx,1,5)=	'C9501'	or
+substr(dx,1,5)=	'C9502'	or
+substr(dx,1,5)=	'C9510'	or
+substr(dx,1,5)=	'C9511'	or
+substr(dx,1,5)=	'C9512'	or
+substr(dx,1,5)=	'C9590'	or
+substr(dx,1,5)=	'C9591'	or
+substr(dx,1,5)=	'C9592'	or
+substr(dx,1,3)=	'D45'	or
+substr(dx,1,4)=	'D751' ) */
+and smi_cancer=0
+then smi_cancer=1;
+/* ICD 9 - Advanced Liver Disease */
+if(substr(dx,1,4)='4560' or
+substr(dx,1,4)='4561'    or
+substr(dx,1,5)='45620'   or
+substr(dx,1,5)='45621'   or
+substr(dx,1,4)='5710'    or
+substr(dx,1,4)='5712'    or
+substr(dx,1,4)='5715'    or
+substr(dx,1,4)='5716'    or
+substr(dx,1,4)='5718'    or
+substr(dx,1,4)='5719'    or
+substr(dx,1,4)='5723'    or
+substr(dx,1,4)='5724'    or
+substr(dx,1,4)='5728'    or
+substr(dx,1,4)=	'V427' )
+/* ICD 10 - Advanced Liver Disease
+substr(dx,1,5)=	'I8500'  or
+substr(dx,1,5)=	'I8501'  or
+substr(dx,1,5)=	'I8510'  or
+substr(dx,1,5)=	'I8511'  or
+substr(dx,1,4)=	'K700'   or
+substr(dx,1,5)=	'K7030'  or
+substr(dx,1,5)=	'K7210'  or
+substr(dx,1,5)=	'K7290'  or
+substr(dx,1,4)=	'K740'   or
+substr(dx,1,4)=	'K741'   or
+substr(dx,1,4)=	'K743'   or
+substr(dx,1,4)=	'K744'   or
+substr(dx,1,4)=	'K745'   or
+substr(dx,1,5)=	'K7460'  or
+substr(dx,1,5)=	'K7469'  or
+substr(dx,1,4)=	'K760'   or
+substr(dx,1,4)=	'K766'   or
+substr(dx,1,4)=	'K767'   or
+substr(dx,1,5)=	'K7689'  or
+substr(dx,1,4)=	'K769'   or
+substr(dx,1,4)=	'Z944'  ) */
+and smi_ald=0
+then smi_ald=1;
+/* ICD 9 - ALS */
+if(substr(dx,1,5)='33520' )
+/* ICD 10 - ALS 
+substr(dx,1,5)='G1221') */
+and smi_als = 0
+then smi_als = 1;
+/* ICD 9 - CHF */
+if(substr(dx,1,5)='39891'  or
+substr(dx,1,5)=	'40211'    or
+substr(dx,1,5)=	'40291'    or
+substr(dx,1,5)=	'40411'    or
+substr(dx,1,5)=	'40413'    or
+substr(dx,1,5)=	'40491'    or
+substr(dx,1,5)=	'40493'    or
+substr(dx,1,4)=	'4280'     or
+substr(dx,1,4)=	'4281'     or
+substr(dx,1,5)=	'42820'    or
+substr(dx,1,5)=	'42821'    or
+substr(dx,1,5)=	'42822'    or
+substr(dx,1,5)=	'42823'    or
+substr(dx,1,5)=	'42830'    or
+substr(dx,1,5)=	'42831'    or
+substr(dx,1,5)=	'42832'    or
+substr(dx,1,5)=	'42833'    or
+substr(dx,1,5)=	'42840'    or
+substr(dx,1,5)=	'42841'    or
+substr(dx,1,5)=	'42842'    or
+substr(dx,1,5)=	'42843'    or
+substr(dx,1,4)=	'4289'  )
+/* ICD 10 - CHF
+substr(dx,1,5)='I0981'   or
+substr(dx,1,4)='I110'    or
+substr(dx,1,4)='I130'    or
+substr(dx,1,4)='I132'    or
+substr(dx,1,4)='I501'    or
+substr(dx,1,5)='I5020'   or
+substr(dx,1,5)='I5021'   or
+substr(dx,1,5)='I5022'   or
+substr(dx,1,5)='I5023'   or
+substr(dx,1,5)='I5030'   or
+substr(dx,1,5)='I5031'   or
+substr(dx,1,5)='I5032'   or
+substr(dx,1,5)='I5033'   or
+substr(dx,1,5)='I5040'   or
+substr(dx,1,5)='I5041'   or
+substr(dx,1,5)='I5042'   or
+substr(dx,1,5)='I5043'   or
+substr(dx,1,4)='I509') */
+and diagnosis_description = 'Principal'
+and msdw_encounter_type='Inpatient'
+and smi_chf = 0
+then smi_chf = 1;
+/* ICD 9 - COPD */
+if(substr(dx,1,3)='490' or
+substr(dx,1,4)='4910'   or
+substr(dx,1,4)='4911'   or
+substr(dx,1,5)='49120'  or
+substr(dx,1,5)='49121'  or
+substr(dx,1,5)='49122'  or
+substr(dx,1,4)='4918'   or
+substr(dx,1,4)='4919'   or
+substr(dx,1,4)='4920'   or
+substr(dx,1,4)='4928'   or
+substr(dx,1,5)='49300'  or
+substr(dx,1,5)='49301'  or
+substr(dx,1,5)='49302'  or
+substr(dx,1,5)='49310'  or
+substr(dx,1,5)='49311'  or
+substr(dx,1,5)='49312'  or
+substr(dx,1,5)='49320'  or
+substr(dx,1,5)='49321'  or
+substr(dx,1,5)='49322'  or
+substr(dx,1,5)='49381'  or
+substr(dx,1,5)='49382'  or
+substr(dx,1,5)='49390'  or
+substr(dx,1,5)='49391'  or
+substr(dx,1,4)='4940'   or
+substr(dx,1,4)='4941'   or
+substr(dx,1,4)='4950'   or
+substr(dx,1,4)='4951'   or
+substr(dx,1,4)='4952'   or
+substr(dx,1,4)='4953'   or
+substr(dx,1,4)='4954'   or
+substr(dx,1,4)='4955'   or
+substr(dx,1,4)='4956'   or
+substr(dx,1,4)='4957'   or
+substr(dx,1,4)='4958'   or
+substr(dx,1,4)='4959'   or
+substr(dx,1,3)='496'    or
+substr(dx,1,3)='500'    or
+substr(dx,1,3)='501'    or
+substr(dx,1,3)='502'    or
+substr(dx,1,3)='503'    or
+substr(dx,1,3)='504'    or
+substr(dx,1,3)='505'    or
+substr(dx,1,4)='5064'   )
+/* ICD 10 - COPD 
+substr(dx,1,3)=	'J40'	    or
+substr(dx,1,4)=	'J410'	or
+substr(dx,1,4)=	'J411'	or
+substr(dx,1,4)=	'J418'	or
+substr(dx,1,3)=	'J42'	    or
+substr(dx,1,4)=	'J439'	or
+substr(dx,1,4)=	'J440'	or
+substr(dx,1,4)=	'J441'	or
+substr(dx,1,4)=	'J449'	or
+substr(dx,1,5)=	'J4520'	or
+substr(dx,1,5)=	'J4521'	or
+substr(dx,1,5)=	'J4522'	or
+substr(dx,1,6)=	'J45902'	or
+substr(dx,1,6)=	'J45909'	or
+substr(dx,1,6)=	'J45990'	or
+substr(dx,1,6)=	'J45991'	or
+substr(dx,1,6)=	'J45998'	or
+substr(dx,1,4)=	'J471'	or
+substr(dx,1,4)=	'J479'	or
+substr(dx,1,3)=	'J60'	    or
+substr(dx,1,3)=	'J61'	    or
+substr(dx,1,4)=	'J628'	or
+substr(dx,1,4)=	'J630'	or
+substr(dx,1,4)=	'J631'	or
+substr(dx,1,4)=	'J632'	or
+substr(dx,1,4)=	'J633'	or
+substr(dx,1,4)=	'J634'	or
+substr(dx,1,4)=	'J635'	or
+substr(dx,1,4)=	'J636'	or
+substr(dx,1,3)=	'J64'	    or
+substr(dx,1,4)=	'J660'	or
+substr(dx,1,4)=	'J661'	or
+substr(dx,1,4)=	'J662'	or
+substr(dx,1,4)=	'J668'	or
+substr(dx,1,4)=	'J670'	or
+substr(dx,1,4)=	'J671'	or
+substr(dx,1,4)=	'J672'	or
+substr(dx,1,4)=	'J673'	or
+substr(dx,1,4)=	'J674'	or
+substr(dx,1,4)=	'J675'	or
+substr(dx,1,4)=	'J676'	or
+substr(dx,1,4)=	'J677'	or
+substr(dx,1,4)=	'J678'	or
+substr(dx,1,4)=	'J679'	or
+substr(dx,1,4)=	'J684'	) */
+and diagnosis_description = 'Principal'
+and msdw_encounter_type='Inpatient'
+and smi_copd=0
+then smi_copd=1;
+/* ICD 9 - Diabetes */
+if(substr(dx,1,5)=	'25040'	or
+ substr(dx,1,5)=	'25041'	or
+ substr(dx,1,5)=	'25042'	or
+ substr(dx,1,5)=	'25043'	or
+ substr(dx,1,5)=	'25050'	or
+ substr(dx,1,5)=	'25051'	or
+ substr(dx,1,5)=	'25052'	or
+ substr(dx,1,5)=	'25053'	or
+ substr(dx,1,5)=	'25060'	or
+ substr(dx,1,5)=	'25061'	or
+ substr(dx,1,5)=	'25062'	or
+ substr(dx,1,5)=	'25063'	or
+ substr(dx,1,5)=	'25070'	or 
+ substr(dx,1,5)=	'25071'	or
+ substr(dx,1,5)=	'25072'	or
+ substr(dx,1,5)=	'25073'	or
+ substr(dx,1,5)=	'25090'	or
+ substr(dx,1,5)=	'25091'	or
+ substr(dx,1,5)=	'25092'	or
+ substr(dx,1,5)=	'25093' )
+ /* ICD 10 - Diabetes 
+substr(dx,1,5)=	'E1021'	or
+substr(dx,1,5)=	'E1029'	or
+substr(dx,1,6)=	'E10311'	or
+substr(dx,1,6)=	'E10319'	or
+substr(dx,1,5)=	'E1036'	or
+substr(dx,1,5)=	'E1037'	or
+substr(dx,1,5)=	'E1039'	or
+substr(dx,1,5)=	'E1040'	or
+substr(dx,1,5)=	'E1051'	or
+substr(dx,1,5)=	'E1065'	or
+substr(dx,1,4)=	'E108'	or
+substr(dx,1,5)=	'E1121'	or
+substr(dx,1,5)=	'E1129'	or
+substr(dx,1,6)=	'E11311'	or
+substr(dx,1,6)=	'E11319'	or
+substr(dx,1,5)=	'E1136'	or
+substr(dx,1,5)=	'E1139'	or
+substr(dx,1,5)=	'E1140'	or
+substr(dx,1,5)=	'E1151'	or
+substr(dx,1,5)=	'E1165'	or
+substr(dx,1,4)=	'E118'	) */
+and smi_dia = 0
+then smi_dia = 1;
+/* ICD 9 - ESRD */
+if(substr(dx,1,5)=	'40311'	or
+substr(dx,1,5)=	'40391'	or
+substr(dx,1,5)=	'40412'	or
+substr(dx,1,5)=	'40492'	or
+substr(dx,1,3)=	'586'	    or
+substr(dx,1,4)=	'V420'	or
+substr(dx,1,5)=	'V4511'	or
+substr(dx,1,5)=	'V4512'	or
+substr(dx,1,4)=	'V560' )
+/* ICD 10 - ESRD 
+substr(dx,1,4)=	'I120' or
+substr(dx,1,5)=	'I1311' or
+substr(dx,1,3)=	'N19'    or
+substr(dx,1,5)=	'Z4931' or
+substr(dx,1,5)=	'Z9115' or
+substr(dx,1,4)=	'Z940' or
+substr(dx,1,4)=	'Z992' ) */
+and smi_esrd = 0
+then smi_esrd = 1;
+/* ICD 9 - Hip Fracture (Admitting) */
+if(substr(dx,1,3)=	'820'	)
+/* ICD 10 - Hip Fracture (Admitting)
+substr(dx,1,4)=	'S720')
+/*and diagnosis_description = 'Admitting'*/
+and smi_hip = 0
+then smi_hip = 1;
+
+/* ICD 9 - HIV */ 
+if(substr(dx,1,3)='042' or
+   substr(dx,1,3)='043' or
+   substr(dx,1,3)='044' )
+/* ICD 10 - HIV 
+substr(dx,1,3)='B20') */
+and smi_hiv = 0
+then smi_hiv = 1;
+/* ICD 9 - Ischemic Heart Disease */
+if(substr(dx,1,5)=	'41000'	or
+substr(dx,1,5)=	'41001'	or
+substr(dx,1,5)=	'41002'	or
+substr(dx,1,5)=	'41010'	or
+substr(dx,1,5)=	'41011'	or
+substr(dx,1,5)=	'41012'	or
+substr(dx,1,5)=	'41020'	or
+substr(dx,1,5)=	'41021'	or
+substr(dx,1,5)=	'41022'	or
+substr(dx,1,5)=	'41030'	or
+substr(dx,1,5)=	'41031'	or
+substr(dx,1,5)=	'41032'	or
+substr(dx,1,5)=	'41040'	or
+substr(dx,1,5)=	'41041'	or
+substr(dx,1,5)=	'41042'	or
+substr(dx,1,5)=	'41050'	or
+substr(dx,1,5)=	'41051'	or
+substr(dx,1,5)=	'41052'	or
+substr(dx,1,5)=	'41060'	or
+substr(dx,1,5)=	'41061'	or
+substr(dx,1,5)=	'41062'	or
+substr(dx,1,5)=	'41070'	or
+substr(dx,1,5)=	'41071'	or
+substr(dx,1,5)=	'41072'	or
+substr(dx,1,5)=	'41080'	or
+substr(dx,1,5)=	'41081'	or
+substr(dx,1,5)=	'41082'	or
+substr(dx,1,5)=	'41090'	or
+substr(dx,1,5)=	'41091'	or
+substr(dx,1,5)=	'41092'	or
+substr(dx,1,4)=	'4110'	or
+substr(dx,1,4)=	'4111'	or
+substr(dx,1,5)=	'41181'	or
+substr(dx,1,5)=	'41189'	or
+substr(dx,1,4)=	'412'	or
+substr(dx,1,4)=	'4130'	or
+substr(dx,1,4)=	'4131'	or
+substr(dx,1,4)=	'4139'	or
+substr(dx,1,5)=	'41400'	or
+substr(dx,1,5)=	'41401'	or
+substr(dx,1,5)=	'41402'	or
+substr(dx,1,5)=	'41403'	or
+substr(dx,1,5)=	'41404'	or
+substr(dx,1,5)=	'41405'	or
+substr(dx,1,5)=	'41406'	or
+substr(dx,1,5)=	'41407'	or
+substr(dx,1,5)=	'41410'	or
+substr(dx,1,5)=	'41411'	or
+substr(dx,1,5)=	'41412'	or
+substr(dx,1,5)=	'41419'	or
+substr(dx,1,4)=	'4142'	or
+substr(dx,1,4)=	'4143'	or
+substr(dx,1,4)=	'4148'	or
+substr(dx,1,4)=	'4149' )
+/* ICD 10 - Ischemic Heart Disease
+substr(dx,1,4)=	'I200'	or
+substr(dx,1,4)=	'I201'	or
+substr(dx,1,4)=	'I208'	or
+substr(dx,1,4)=	'I209'	or
+substr(dx,1,5)=	'I2109'	or
+substr(dx,1,5)=	'I2111'	or
+substr(dx,1,5)=	'I2119'	or
+substr(dx,1,5)=	'I2129'	or
+substr(dx,1,4)=	'I213'	or
+substr(dx,1,4)=	'I214'	or
+substr(dx,1,4)=	'I240'	or
+substr(dx,1,4)=	'I241'	or
+substr(dx,1,4)=	'I248'	or
+substr(dx,1,5)=	'I2510'	or
+substr(dx,1,4)=	'I252'	or
+substr(dx,1,4)=	'I253'	or
+substr(dx,1,5)=	'I2541'	or
+substr(dx,1,5)=	'I2542'	or
+substr(dx,1,4)=	'I255'	or
+substr(dx,1,6)=	'I25810'	or
+substr(dx,1,6)=	'I25811'	or
+substr(dx,1,6)=	'I25812'	or
+substr(dx,1,5)=	'I2582'	or
+substr(dx,1,5)=	'I2583'	or
+substr(dx,1,5)=	'I2589'	or
+substr(dx,1,4)=	'I259'	) */
+and smi_ihd = 0
+then smi_ihd =1;
+/* ICD 9 - PVD */
+if(substr(dx,1,4)=	'4400'	or
+substr(dx,1,4)=	'4401'	or
+substr(dx,1,5)=	'44020'	or
+substr(dx,1,5)=	'44021'	or
+substr(dx,1,5)=	'44022'	or
+substr(dx,1,5)=	'44023'	or
+substr(dx,1,5)=	'44024'	or
+substr(dx,1,5)=	'44029'	or
+substr(dx,1,5)=	'44030'	or
+substr(dx,1,5)=	'44031'	or
+substr(dx,1,5)=	'44032'	or
+substr(dx,1,4)=	'4404'	or
+substr(dx,1,4)=	'4408'	or
+substr(dx,1,4)=	'4409'	or
+substr(dx,1,4)=	'4412'	or
+substr(dx,1,4)=	'4414'	or
+substr(dx,1,4)=	'4417'	or
+substr(dx,1,4)=	'4419'	or
+substr(dx,1,4)=	'4431'	or
+substr(dx,1,5)=	'44321'	or
+substr(dx,1,5)=	'44322'	or
+substr(dx,1,5)=	'44323'	or
+substr(dx,1,5)=	'44324'	or
+substr(dx,1,5)=	'44329'	or
+substr(dx,1,5)=	'44381'	or
+substr(dx,1,5)=	'44382'	or
+substr(dx,1,5)=	'44389'	or
+substr(dx,1,4)=	'4439'	or
+substr(dx,1,4)=	'4471'	or
+substr(dx,1,4)=	'5571'	or
+substr(dx,1,4)=	'5579'	or
+substr(dx,1,4)=	'V434' )
+/* ICD 10 - PVD 
+substr(dx,1,4)=	'I700'	or
+substr(dx,1,4)=	'I701'	or
+substr(dx,1,6)=	'I70209'	or
+substr(dx,1,6)=	'I70219'	or
+substr(dx,1,6)=	'I70229'	or
+substr(dx,1,5)=	'I7025' 	or
+substr(dx,1,6)=	'I70269'	or
+substr(dx,1,6)=	'I70299'	or
+substr(dx,1,6)=	'I70399'	or
+substr(dx,1,6)=	'I70499'	or
+substr(dx,1,6)=	'I70599'	or
+substr(dx,1,4)=	'I708'	or
+substr(dx,1,5)=	'I7090'	or
+substr(dx,1,5)=	'I7091'	or
+substr(dx,1,5)=	'I7092'	or
+substr(dx,1,4)=	'I712'	or
+substr(dx,1,4)=	'I714'	or
+substr(dx,1,4)=	'I716'	or
+substr(dx,1,4)=	'I719'	or
+substr(dx,1,4)=	'I731'	or
+substr(dx,1,5)=	'I7381'	or
+substr(dx,1,5)=	'I7389'	or
+substr(dx,1,4)=	'I739'	or
+substr(dx,1,4)=	'I771'	or
+substr(dx,1,5)=	'I7771'	or
+substr(dx,1,5)=	'I7772'	or
+substr(dx,1,5)=	'I7773'	or
+substr(dx,1,5)=	'I7774'	or
+substr(dx,1,5)=	'I7775'	or
+substr(dx,1,5)=	'I7776'	or
+substr(dx,1,5)=	'I7777'	or
+substr(dx,1,5)=	'I7779'	or
+substr(dx,1,4)=	'I798'	or
+substr(dx,1,4)=	'K551'	or
+substr(dx,1,4)=	'K559'	or
+substr(dx,1,6)=	'Z95828') */
+and smi_pvd = 0
+then smi_pvd = 1;
+/* ICD 9 - Renal */
+if(substr(dx,1,5)=	'40311'	or
+substr(dx,1,5)=	'40412'	or
+substr(dx,1,5)=	'40492'	or
+substr(dx,1,4)=	'5851'	or
+substr(dx,1,4)=	'5852'	or
+substr(dx,1,4)=	'5853'	or
+substr(dx,1,4)=	'5854'	or
+substr(dx,1,4)=	'5855'	or
+substr(dx,1,4)=	'5856'	or
+substr(dx,1,4)=	'5859'	or
+substr(dx,1,3)=	'586'	or
+substr(dx,1,4)=	'V420'	or
+substr(dx,1,5)=	'V4511'	or
+substr(dx,1,5)=	'V4512'	or
+substr(dx,1,4)=	'V560'	or
+substr(dx,1,4)=	'V568'	)
+/* ICD 10 - Renal 
+substr(dx,1,4)=	'I120'	or
+substr(dx,1,5)=	'I1311'	or
+substr(dx,1,4)=	'N181'	or
+substr(dx,1,4)=	'N182'	or
+substr(dx,1,4)=	'N183'	or
+substr(dx,1,4)=	'N184'	or
+substr(dx,1,4)=	'N185'	or
+substr(dx,1,4)=	'N186'	or
+substr(dx,1,4)=	'N189'	or
+substr(dx,1,3)=	'N19'	or
+substr(dx,1,5)=	'Z4931'	or
+substr(dx,1,5)=	'Z4932'	or
+substr(dx,1,5)=	'Z9115'	or
+substr(dx,1,4)=	'Z940'	or
+substr(dx,1,4)=	'Z992'	) */
+and smi_rd = 0
+then smi_rd = 1;
+
+/* ICD 9 - Dartmouth Cancer */
+
+if(substr(dx,1,4)= '1500' or
+substr(dx,1,4)=	'1501' or
+substr(dx,1,4)=	'1502' or
+substr(dx,1,4)=	'1503' or
+substr(dx,1,4)=	'1504' or
+substr(dx,1,4)=	'1505' or
+substr(dx,1,4)=	'1508' or
+substr(dx,1,4)=	'1509' or
+substr(dx,1,4)=	'1510' or
+substr(dx,1,4)=	'1511' or
+substr(dx,1,4)=	'1512' or
+substr(dx,1,4)=	'1513' or
+substr(dx,1,4)=	'1514' or
+substr(dx,1,4)=	'1515' or
+substr(dx,1,4)=	'1516' or
+substr(dx,1,4)=	'1518' or
+substr(dx,1,4)=	'1519' or
+substr(dx,1,4)=	'1550' or
+substr(dx,1,4)=	'1551' or
+substr(dx,1,4)=	'1552' or
+substr(dx,1,4)=	'1570' or
+substr(dx,1,4)=	'1571' or
+substr(dx,1,4)=	'1572' or
+substr(dx,1,4)=	'1573' or
+substr(dx,1,4)=	'1574' or
+substr(dx,1,4)=	'1578' or
+substr(dx,1,4)=	'1579' or
+substr(dx,1,4)=	'1580' or
+substr(dx,1,4)=	'1588' or
+substr(dx,1,4)=	'1589' or
+substr(dx,1,4)=	'1620' or
+substr(dx,1,4)=	'1622' or
+substr(dx,1,4)=	'1623' or
+substr(dx,1,4)=	'1624' or
+substr(dx,1,4)=	'1625' or
+substr(dx,1,4)=	'1628' or
+substr(dx,1,4)=	'1629' or
+substr(dx,1,4)=	'1630' or
+substr(dx,1,4)=	'1631' or
+substr(dx,1,4)=	'1638' or
+substr(dx,1,4)=	'1639' or
+substr(dx,1,4)=	'1830' or
+substr(dx,1,4)=	'1832' or
+substr(dx,1,4)=	'1833' or
+substr(dx,1,4)=	'1834' or
+substr(dx,1,4)=	'1835' or
+substr(dx,1,4)=	'1838' or
+substr(dx,1,4)=	'1839' or
+substr(dx,1,4)=	'1910' or
+substr(dx,1,4)=	'1911' or
+substr(dx,1,4)=	'1912' or
+substr(dx,1,4)=	'1913' or
+substr(dx,1,4)=	'1914' or
+substr(dx,1,4)=	'1915' or
+substr(dx,1,4)=	'1916' or
+substr(dx,1,4)=	'1917' or
+substr(dx,1,4)=	'1918' or
+substr(dx,1,4)=	'1919' or
+substr(dx,1,4)=	'2890' or
+substr(dx,1,5)=	'20400'  or
+substr(dx,1,5)=	'20410'  or
+substr(dx,1,5)=	'20420'  or
+substr(dx,1,5)=	'20480'  or
+substr(dx,1,5)=	'20490'  or
+substr(dx,1,5)=	'20500'  or
+substr(dx,1,5)=	'20510'  or
+substr(dx,1,5)=	'20520'  or
+substr(dx,1,5)=	'20530'  or
+substr(dx,1,5)=	'20580'  or
+substr(dx,1,5)=	'20590'  or
+substr(dx,1,5)=	'20600'  or
+substr(dx,1,5)=	'20610'  or
+substr(dx,1,5)=	'20620'  or
+substr(dx,1,5)=	'20680'  or
+substr(dx,1,5)=	'20690'  or
+substr(dx,1,5)=	'20700'  or
+substr(dx,1,5)=	'20710'  or
+substr(dx,1,5)=	'20720'  or
+substr(dx,1,5)=	'20780'  or
+substr(dx,1,5)=	'20800'  or
+substr(dx,1,5)=	'20810'  or
+substr(dx,1,5)=	'20820'  or
+substr(dx,1,5)=	'20880'  or
+substr(dx,1,4)=	'1960'   or
+substr(dx,1,4)=	'1961'   or
+substr(dx,1,4)=	'1962'   or
+substr(dx,1,4)=	'1963'   or
+substr(dx,1,4)=	'1965'   or
+substr(dx,1,4)=	'1966'   or
+substr(dx,1,4)=	'1968'   or
+substr(dx,1,4)=	'1969'   or
+substr(dx,1,4)=	'1970'   or
+substr(dx,1,4)=	'1971'   or
+substr(dx,1,4)=	'1972'   or
+substr(dx,1,4)=	'1973'   or
+substr(dx,1,4)=	'1974'   or
+substr(dx,1,4)=	'1975'   or
+substr(dx,1,4)=	'1976'   or
+substr(dx,1,4)=	'1977'   or
+substr(dx,1,4)=	'1978'   or
+substr(dx,1,4)=	'1980'   or
+substr(dx,1,4)=	'1981'   or
+substr(dx,1,4)=	'1982'   or
+substr(dx,1,4)=	'1983'   or
+substr(dx,1,4)=	'1984'   or
+substr(dx,1,4)=	'1985'   or
+substr(dx,1,4)=	'1986'   or
+substr(dx,1,4)=	'1987'   or
+substr(dx,1,4)=	'1990'   or
+substr(dx,1,4)=	'1991'   or
+substr(dx,1,5)=	'19881'  or
+substr(dx,1,5)=	'19882'  or
+substr(dx,1,5)=	'19889' )
+and dart_cancer = 0
+then dart_cancer = 1;
+
+/* ICD 9 - Dartmouth COPD */
+if(substr(dx,1,3)='494'  or
+substr(dx,1,3)='496'     or
+substr(dx,1,3)='501'     or
+substr(dx,1,3)='515'     or
+substr(dx,1,4)='4911'    or
+substr(dx,1,4)='4918'    or
+substr(dx,1,4)='4919'    or
+substr(dx,1,4)='4928'    or
+substr(dx,1,4)='4940'    or
+substr(dx,1,4)='4941'    or
+substr(dx,1,4)='5064'    or
+substr(dx,1,5)='49120'   or
+substr(dx,1,5)='49121'   or
+substr(dx,1,5)='49122'   or
+substr(dx,1,5)='49310'   or
+substr(dx,1,5)='49311'   or
+substr(dx,1,5)='49312'   or
+substr(dx,1,5)='49320'   or
+substr(dx,1,5)='49321'   or
+substr(dx,1,5)='49322'   or
+substr(dx,1,5)='49390'   or
+substr(dx,1,5)='49391'   or
+substr(dx,1,5)='49392'  )
+and dart_copd = 0
+then dart_copd = 1;
+
+* ICD 9 - Dartmouth CAD;
+if(substr(dx,1,3)='412'   or
+substr(dx,1,3)='411'      or
+substr(dx,1,4)='4118'     or
+substr(dx,1,4)='4130'     or
+substr(dx,1,4)='4139'     or
+substr(dx,1,4)='4140'     or
+substr(dx,1,4)='4148'     or
+substr(dx,1,4)='4149'     or
+substr(dx,1,5)='41181'    or
+substr(dx,1,5)='41189'    or
+substr(dx,1,5)='41400'    or
+substr(dx,1,5)='41401'    or
+substr(dx,1,5)='41402'    or
+substr(dx,1,5)='41403'    or
+substr(dx,1,5)='41404'    or
+substr(dx,1,5)='41405'    or
+substr(dx,1,5)='41406'    or
+substr(dx,1,5)='41407'    ) 
+and dart_cad = 0
+then dart_cad = 1;
+
+* ICD 9 - CHF;
+if(substr(dx,1,4)='4280'   or
+substr(dx,1,4)='4281'      or
+substr(dx,1,4)='4282'      or
+substr(dx,1,4)='4283'      or
+substr(dx,1,4)='4284'      or
+substr(dx,1,4)='4289'      or
+substr(dx,1,5)='40201'     or
+substr(dx,1,5)='40211'     or
+substr(dx,1,5)='40291'     or
+substr(dx,1,5)='39891'     or
+substr(dx,1,5)='40401'     or
+substr(dx,1,5)='40403'     or
+substr(dx,1,5)='40411'     or
+substr(dx,1,5)='40491'     or
+substr(dx,1,5)='40493'     )
+and dart_chf = 0
+then dart_chf = 1;
+
+* ICD 9 - Dartmouth PVD ;
+if(substr(dx,1,4)='4400'    or
+substr(dx,1,4)='4401'       or
+substr(dx,1,4)='4403'       or
+substr(dx,1,4)='4408'       or
+substr(dx,1,4)='4409'       or
+substr(dx,1,4)='4410'       or
+substr(dx,1,4)='4411'       or
+substr(dx,1,4)='4412'       or
+substr(dx,1,4)='4413'       or
+substr(dx,1,4)='4414'       or
+substr(dx,1,4)='4415'       or
+substr(dx,1,4)='4416'       or
+substr(dx,1,4)='4417'       or
+substr(dx,1,4)='4419'       or
+substr(dx,1,4)='4439'       or
+substr(dx,1,5)='44020'      or
+substr(dx,1,5)='44021'      or
+substr(dx,1,5)='44022'      or
+substr(dx,1,5)='44023'      or
+substr(dx,1,5)='44024'      or
+substr(dx,1,5)='44029'    )
+and dart_pvd = 0
+then dart_pvd = 1;
+
+* ICD 9 - Dartmouth Severe Chronic Liver Disease ;
+
+if(substr(dx,1,4)='5712' or
+substr(dx,1,4)='5715'    or
+substr(dx,1,4)='5716'    or
+substr(dx,1,4)='5723'  )
+and dart_cld = 0
+then dart_cld = 1;
+
+* ICD 9 - Dartmouth Diabetes w/End Organ Damage ;
+if(substr(dx,1,5)='25040'   or
+substr(dx,1,5)='25041'      or
+substr(dx,1,5)='25042'      or
+substr(dx,1,5)='25043'      or
+substr(dx,1,5)='25050'      or
+substr(dx,1,5)='25051'      or
+substr(dx,1,5)='25052'      or
+substr(dx,1,5)='25053'      or
+substr(dx,1,5)='25060'      or
+substr(dx,1,5)='25061'      or
+substr(dx,1,5)='25062'      or
+substr(dx,1,5)='25063'      or
+substr(dx,1,5)='25070'      or
+substr(dx,1,5)='25071'      or
+substr(dx,1,5)='25072'      or
+substr(dx,1,5)='25073'      or
+substr(dx,1,5)='25090'      or
+substr(dx,1,5)='25091'      or
+substr(dx,1,5)='25092'      or
+substr(dx,1,5)='25093'      or
+substr(dx,1,4)='3572'       or
+substr(dx,1,5)='36641'      or
+substr(dx,1,5)='36201'      or
+substr(dx,1,5)='36202' )
+and dart_diab = 0
+then dart_diab = 1;
+
+* ICD 9 - Dartmouth Renal Disease ;
+if(substr(dx,1,5)='40301'   or
+substr(dx,1,5)='40311'      or
+substr(dx,1,5)='40391'      or
+substr(dx,1,3)='585'        or
+substr(dx,1,4)='V451'       or
+substr(dx,1,4)='V560'       or
+substr(dx,1,4)='V568'  )
+and dart_renal = 0
+then dart_renal = 1;
+
+* ICD 9 - Dartmouth Dementia;
+if(substr(dx,1,4)='2900'     or
+substr(dx,1,4)='2903'        or
+substr(dx,1,4)='2908'        or
+substr(dx,1,4)='2909'        or
+substr(dx,1,4)='2940'        or
+substr(dx,1,4)='2941'        or
+substr(dx,1,4)='2948'        or
+substr(dx,1,4)='2949'        or
+substr(dx,1,4)='3310'        or
+substr(dx,1,4)='3312'        or
+substr(dx,1,5)='29101'       or
+substr(dx,1,5)='29011'       or
+substr(dx,1,5)='29013'       or
+substr(dx,1,5)='29020'       or
+substr(dx,1,5)='29021'       or
+substr(dx,1,5)='29040'       or
+substr(dx,1,5)='29041'       or
+substr(dx,1,5)='29042'       or
+substr(dx,1,5)='29043'       or
+substr(dx,1,5)='29410'       or
+substr(dx,1,5)='29411'       or
+substr(dx,1,3)='797'	)
+and dart_dem = 0
+then dart_dem = 1;
+
+end;
+run;
+
+proc sql;
+create table criteria as 
+select distinct mrn,
+sum(smi_dem) as com_sdem,
+sum(smi_cancer) as com_scancer,
+sum(smi_esrd) as com_sesrd,
+sum(smi_chf) as com_schf,
+sum(smi_copd) as com_scopd,
+sum(smi_dia) as com_sdia,
+sum(smi_ald) as com_sald,
+sum(smi_hiv) as com_shiv,
+sum(smi_als) as com_sals,
+sum(smi_hip) as com_ship,
+sum(smi_ihd) as com_sihd,
+sum(smi_pvd) as com_spvd,
+sum(smi_rd) as com_srd,
+sum(dart_cancer) as com_dcancer,
+sum(dart_copd) as com_dcopd,
+sum(dart_cad)  as com_dcad,
+sum(dart_chf)  as com_dchf,
+sum(dart_pvd)  as com_dpvd,
+sum(dart_cld)  as com_dcld,
+sum(dart_diab) as com_ddiab,
+sum(dart_renal) as com_drenal,
+sum(dart_dem) as com_ddem
+from combined
+group by mrn;
+quit;
+
+data criteria;
+set criteria;
+smi_dem= 0;
+smi_cancer = 0;
+smi_esrd= 0;
+smi_chf = 0;
+smi_copd = 0;
+smi_dia = 0;
+smi_ald = 0;
+smi_hiv = 0;
+smi_als = 0;
+smi_hip = 0;
+smi_ihd = 0;
+smi_pvd = 0;
+smi_rd = 0;
+dart_cancer = 0;
+dart_copd = 0;
+dart_cad = 0;
+dart_chf = 0;
+dart_pvd = 0;
+dart_cld = 0;
+dart_diab = 0;
+dart_renal = 0;
+dart_dem = 0;
+run;
+
+data criteria1;
+set criteria;
+array list_com com_scancer--com_ddem;
+array list_com_bin smi_cancer--dart_dem;
+
+do over list_com;
+list_com_bin=0;
+if list_com>0 then do;
+list_com_bin = 1;
+end;
+end;
+if com_sdem>=1 then smi_dem = 1;
+if com_sdem=1 then ind_dem=1;
+smi_diab_comp = 0;
+if smi_dia=1 and smi_ihd=1 then smi_diab_comp=1;
+if smi_dia=1 and smi_pvd=1 then smi_diab_comp=1;
+if smi_dia=1 and smi_rd=1 then smi_diab_comp=1;
+any_smi = smi_dem + smi_cancer + smi_esrd + smi_chf + smi_copd + smi_diab_comp + smi_ald + smi_hiv
++ smi_als + smi_hip;
+any_dart=dart_cancer +dart_copd +dart_cad +dart_chf + dart_pvd + dart_cld + dart_diab + dart_renal + dart_dem ;
+ind_multi=any_dart>=3;
+run;
+
+data criteria1; 
+set criteria1;
+if any_smi=0 and any_dart<=2 then smi_diab_comp =1;
+run;
+
+
+proc sql;
+create table criteria2 as select a.*,b.*
+from cohort a
+inner join criteria1 b
+on a.mrn = b.mrn;
+quit;
+
+
+data  hope.criteria_met_1yrback; /* Our final cohort - Comprehensive DX list for first 9months of 2015*/
+set criteria2;
+label smi_dem = "SMI - Dementia";
+label smi_cancer = "SMI - Cancer";
+label smi_esrd = "SMI - End Stage Renal Disease";
+label smi_chf = "SMI - Congestive Heart Failure";
+label smi_copd = "SMI - Chronic Obstructive Pulmonary Disease";
+label smi_diab_comp = "SMI - Diabetes w/Complications";
+label smi_ald = "SMI - Advanced Liver Disease";
+label smi_hiv = "SMI - HIV";
+label smi_als = "SMI - ALS";
+label smi_hip = "SMI - Hip Fracture";
+label dart_cancer = "Dartmouth - Cancer";
+label dart_copd = "Dartmouth - Chronic Obstructive Pulmonary Disease";
+label dart_cad = "Dartmouth - Coronary Artery Disease";
+label dart_chf = "Dartmouth - Congestive Heart Failure";
+label dart_pvd = "Dartmouth - Peripheral Vascular Disease";
+label dart_cld = "Dartmouth - Chronic Liver Disease";
+label dart_diab = "Dartmouth - Diabetes w/End Organ Damage";
+label dart_renal = "Dartmouth - Renal Failure";
+label dart_dem = "Dartmouth - Dementia";
+run;
+
+proc export data=hope.criteria_met_1yrback outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_1yrback.dta" dbms=stata replace; run;
+
+
+H="1 year look back/forward for Charlson & utilization"
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\problemlist.csv" out=problemlist dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17.xlsx" out=demographics dbms=xlsx replace; 
+	sheet="Demographics"; 
+	getnames=YES;
+	run;
+
+proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
+	 getnames=YES;
+	 run;
+
+
+
+data dob_list;
+set dob_list;
+mrn = input(medical_record_number, best12.);
+run;
+
+/*
+data cohort;
+set hope.criteria_met_dx;
+run;
+*/
+
+data cohort;
+set hope.index_date;
+run;
+
+proc sql;
+create table cohort1 as select a.*, b.age
+from cohort a
+inner join dob_list b
+on a.mrn = b.mrn;
+quit;
+
+proc sql;
+create table cohort2 as select a.*, b.gender
+from cohort1 a
+inner join demographics b
+on a.mrn = b.mrn;
+quit;
+
+data cohort;
+set cohort2;
+run;
+
+
+/*
+proc sql;
+create table cohort1 as select a.*, b.dob
+from cohort a
+inner join dob_list b
+on a.mrn = b.mrn;
+quit;
+
+proc sql;
+create table cohort2 as select a.*, b.gender, b.zip, b.insurance
+from cohort1 a
+inner join demographics b
+on a.mrn=b.mrn;
+quit;
+
+
+data cohort (rename=(date = index_date));
+set cohort;
+run;
+
+/*spss stuff
+
+data cohort_spss (drop = com_sdem--com_ddem smi_ihd smi_pvd smi_rd ind_dem ind_multi benchmark);
+set cohort;
+run;
+
+proc export data=cohort_spss outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\spss\9_12_17\cohort_demo.sav" dbms=spss replace; run;
+
+proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
+	 getnames=YES;
+	 run;
+proc import datafile="Amy Kelley results 8-23-17_dme_vns_dnr.xlsx" out=dme dbms=excel replace;
+sheet="DME Orders";
+getnames=YES;
+	 run;
+
+
+data util;
+set util;
+mrn1 = input(mrn, best12.);
+run;
+
+proc sql;
+create table util_spss as select
+a.mrn, b.*
+from cohort_spss a
+inner join util b
+on a.mrn = b.mrn1;
+quit;
+
+proc export data=util_spss outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\spss\9_12_17\utilization.sav" dbms=spss replace; run;
+
+ */
+
+data util;
+set util;
+mrn1 = input(mrn, best12.);
+date = input(encounter_date, mmddyy10.);
+format date date10.;
+run;
+
+
+proc sql;
+create table problemlist_3k as select a.*, b.*
+from cohort a
+inner join problemlist b
+on a.mrn = b.mrn and 0 <= a.index_date - b.diagnosis_date <=365;
+quit;
+
+
+proc sql;
+create table problemlist_3ak as select a.*, b.*
+from cohort a
+inner join util b 
+on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365;
+quit;
+
+proc sql;
+create table problemlist_post as select a.*, b.*
+from cohort a
+inner join util b 
+on a.mrn = b.mrn1 and 0 < b.date - a.index_date <=365;
+quit;
+
+
+data problemlist_3ak;
+set problemlist_3ak;
+if msdw_encounter_type = "Inpatient" then ip_admit = 1;
+if msdw_encounter_type = "Emergency" then ed_visit = 1;
+if icu_admission = "Y" then icu_admit = 1;
+run;
+
+data problemlist_post;
+set problemlist_post;
+if msdw_encounter_type = "Inpatient" then ip_admit_p = 1;
+if msdw_encounter_type = "Emergency" then ed_visit_p = 1;
+if icu_admission = "Y" then icu_admit_p = 1;
+run;
+
+data util_pre;
+set problemlist_3ak;
+where ip_admit=1 or ed_visit=1 or icu_admit=1;
+run;
+
+data util_post;
+set problemlist_post;
+where ip_admit_p=1 or ed_visit_p=1 or icu_admit_p=1;
+run;
+
+data ip_pre (keep = mrn mrn1 ip_admit);
+set util_pre;
+where ip_admit=1;
+run;
+
+data ip_post (keep = mrn mrn1 ip_admit_p);
+set util_post;
+where ip_admit_p=1;
+run;
+
+
+data ed_pre(keep = mrn mrn1 ed_visit);
+set util_pre;
+where ed_visit = 1;
+run;
+
+data ed_post(keep = mrn mrn1 ed_visit_p);
+set util_post;
+where ed_visit_p = 1;
+run;
+
+data icu_pre(keep = mrn mrn1 icu_admit);
+set util_pre;
+where icu_admit = 1;
+run;
+
+data icu_post (keep = mrn mrn1 icu_admit_p);
+set util_post;
+where icu_admit_p = 1;
+run;
+
+proc sort data=ip_pre nodupkey; by mrn; run;
+proc sort data=ed_pre nodupkey; by mrn; run;
+proc sort data=icu_pre nodupkey; by mrn; run;
+
+proc sort data=ip_post nodupkey; by mrn; run;
+proc sort data=ed_post nodupkey; by mrn; run;
+proc sort data=icu_post nodupkey; by mrn; run;
+
+ 
+proc sort data=problemlist_3ak out=test nodupkey; by mrn; run;
+
+
+data problemlist_3ak1 (keep = mrn context_diagnosis_code);
+set problemlist_3ak (rename=(icd9_code = context_diagnosis_code)) ;
+run;
+
+data problemlist_3k (keep = mrn context_diagnosis_code);
+set problemlist_3k;
+run;
+
+data problemlist_f;
+set problemlist_3ak1 problemlist_3k;
+run;
+
+
+data charlson;
+set problemlist_f;
+dx_code = compress(context_diagnosis_code,.);
+comorbi_1=0;
+comorbi_2=0;
+comorbi_3=0;
+comorbi_4=0;
+comorbi_5=0;
+comorbi_6=0;
+comorbi_7=0;
+comorbi_8=0;
+comorbi_9=0;
+comorbi_10=0;
+comorbi_11=0;
+comorbi_12=0;
+comorbi_13=0;
+comorbi_14=0;
+comorbi_15=0;
+comorbi_16=0;
+comorbi_17=0;
+array dx dx_code;
+do over dx;
+*Congestive Heart Failure;
+   if(substr(dx,1,3)='428' or
+   			   substr(dx,1,4)='I099' or
+               substr(dx,1,4)='I110' or
+               substr(dx,1,4)='I130' or
+               substr(dx,1,4)='I132' or
+               substr(dx,1,4)='I255' or
+               substr(dx,1,4)='I420' or
+               substr(dx,1,4)='I425' or
+               substr(dx,1,4)='I426' or
+               substr(dx,1,4)='I427' or
+               substr(dx,1,4)='I428' or
+               substr(dx,1,4)='I429' or
+               substr(dx,1,4)='I43'  or
+               substr(dx,1,4)='I50'  or
+               substr(dx,1,4)='P290')
+		and comorbi_1=0 
+		then comorbi_1=1;*add one binary variables here.;
+ *Myocardial Infarction;
+		if(substr(dx,1,3)='410' or
+               substr(dx,1,3)='412' or
+			   substr(dx,1,3)='I21' or
+               substr(dx,1,3)='I22' or
+               substr(dx,1,4)='I252')
+			and comorbi_2=0 
+		then comorbi_2=1;
+*Periphral Vascular Disease;
+		if(substr(dx,1,4)='0930' or
+               substr(dx,1,4)='4373' or
+               substr(dx,1,3)='440' or
+               substr(dx,1,3)='441' or
+               substr(dx,1,4)='4431' or
+               substr(dx,1,4)='4432' or
+               substr(dx,1,4)='4438' or
+               substr(dx,1,4)='4439' or
+               substr(dx,1,4)='4471' or
+               substr(dx,1,4)='5571' or
+               substr(dx,1,4)='5579' or
+               substr(dx,1,4)='V434' or
+    		   substr(dx,1,3)='I70' or
+               substr(dx,1,3)='I71' or
+               substr(dx,1,4)='I731' or
+               substr(dx,1,4)='I738' or
+               substr(dx,1,4)='I739' or
+               substr(dx,1,4)='I771' or
+               substr(dx,1,4)='I790' or
+               substr(dx,1,4)='I792' or
+               substr(dx,1,4)='K551' or
+               substr(dx,1,4)='K558' or
+               substr(dx,1,4)='K559' or
+			   substr(dx,1,4)='Z958' or
+               substr(dx,1,4)='Z959')
+			and comorbi_3=0 
+		then comorbi_3=1;
+ *Cerebrovascular Disease ;
+        if(substr(dx,1,5)='36234' or
+               substr(dx,1,3)='430' or
+               substr(dx,1,3)='431' or
+               substr(dx,1,3)='432' or
+               substr(dx,1,3)='433' or
+               substr(dx,1,3)='434' or
+               substr(dx,1,3)='435' or
+               substr(dx,1,3)='436' or
+               substr(dx,1,3)='437' or
+               substr(dx,1,3)='438' or
+			   substr(dx,1,3)='G45' or
+               substr(dx,1,3)='G46' or
+               substr(dx,1,4)='H340' or
+               substr(dx,1,3)='I60' or
+               substr(dx,1,3)='I61' or
+               substr(dx,1,3)='I62' or
+               substr(dx,1,3)='I63' or
+               substr(dx,1,3)='I64' or
+               substr(dx,1,3)='I65' or
+			   substr(dx,1,3)='I66' or
+               substr(dx,1,3)='I67' or
+               substr(dx,1,3)='I68' or
+               substr(dx,1,3)='I69')
+			and comorbi_4=0 
+		then comorbi_4=1;
+*Dementia ;
+       if(substr(dx,1,3)='290' or
+               substr(dx,1,4)='2941' or
+               substr(dx,1,4)='3312' or
+			   substr(dx,1,3)='F00' or
+               substr(dx,1,3)='F01' or
+               substr(dx,1,3)='F02' or
+               substr(dx,1,3)='F03' or
+               substr(dx,1,4)='F051' or
+               substr(dx,1,3)='G30' or
+               substr(dx,1,4)='G311')
+			and comorbi_5=0 
+		then comorbi_5=1;
+	*Chronic Pulmonary Disease ;
+        if(substr(dx,1,5)='4168' or
+               substr(dx,1,4)='4169' or
+               substr(dx,1,3)='490' or
+               substr(dx,1,3)='491' or
+               substr(dx,1,3)='492' or
+               substr(dx,1,3)='493' or
+               substr(dx,1,3)='494' or
+               substr(dx,1,3)='495' or
+               substr(dx,1,3)='496' or
+               substr(dx,1,3)='500' or
+               substr(dx,1,3)='501' or
+               substr(dx,1,3)='502' or
+               substr(dx,1,3)='503' or
+               substr(dx,1,3)='504' or
+               substr(dx,1,3)='505' or
+               substr(dx,1,4)='5064' or
+               substr(dx,1,4)='5081' or
+               substr(dx,1,4)='5088' or
+			   substr(dx,1,4)='I278' or
+               substr(dx,1,4)='I279' or
+               substr(dx,1,3)='J40' or
+               substr(dx,1,3)='J41' or
+               substr(dx,1,3)='J42' or
+               substr(dx,1,3)='J43' or
+               substr(dx,1,3)='J44' or
+               substr(dx,1,3)='J45' or
+               substr(dx,1,3)='J46' or
+               substr(dx,1,3)='J47' or
+               substr(dx,1,3)='J60' or
+               substr(dx,1,3)='J61' or
+               substr(dx,1,3)='J62' or
+               substr(dx,1,3)='J63' or
+               substr(dx,1,3)='J64' or
+               substr(dx,1,3)='J65' or
+               substr(dx,1,3)='J66' or
+			   substr(dx,1,3)='J67' or
+               substr(dx,1,4)='J684' or
+               substr(dx,1,4)='J701' or
+               substr(dx,1,4)='J703')
+			and comorbi_6=0 
+		then comorbi_6=1;
+*Connective Tissue Disease-Rheumatic Disease;
+         if(substr(dx,1,4)='4465' or
+               substr(dx,1,4)='7100' or
+               substr(dx,1,4)='7101' or
+               substr(dx,1,4)='7102' or
+               substr(dx,1,4)='7103' or
+               substr(dx,1,4)='7104' or
+               substr(dx,1,4)='7140' or
+               substr(dx,1,4)='7141' or
+               substr(dx,1,4)='7142' or
+               substr(dx,1,4)='7148' or
+               substr(dx,1,3)='725' or
+			   substr(dx,1,3)='M05' or
+               substr(dx,1,3)='M06' or
+               substr(dx,1,4)='M315' or
+               substr(dx,1,3)='M32' or
+               substr(dx,1,3)='M33' or
+               substr(dx,1,3)='M34' or
+               substr(dx,1,4)='M351' or
+               substr(dx,1,4)='M353' or
+               substr(dx,1,4)='M360')
+			and comorbi_7=0 
+		then comorbi_7=1;
+*Peptic Ulcer Disease;
+         if(substr(dx,1,3)='531' or
+               substr(dx,1,3)='532' or
+               substr(dx,1,3)='533' or
+               substr(dx,1,3)='534' or
+			   substr(dx,1,3)='K25' or
+               substr(dx,1,3)='K26' or
+               substr(dx,1,3)='K27' or
+               substr(dx,1,3)='K28')
+			and comorbi_8=0 
+		then comorbi_8=1;	
+*Mild Liver Disease ;
+         if(substr(dx,1,5)='07022' or
+               substr(dx,1,5)='07023' or
+               substr(dx,1,5)='07032' or
+               substr(dx,1,5)='07033' or
+               substr(dx,1,5)='07044' or
+               substr(dx,1,5)='07054' or
+               substr(dx,1,4)='0706' or
+               substr(dx,1,4)='0709' or
+               substr(dx,1,3)='570' or
+               substr(dx,1,3)='571' or
+               substr(dx,1,4)='5733' or
+               substr(dx,1,4)='5734' or
+               substr(dx,1,4)='5738' or
+               substr(dx,1,4)='5739' or
+               substr(dx,1,4)='V427' or
+			   substr(dx,1,3)='B18' or
+               substr(dx,1,4)='K700' or
+               substr(dx,1,4)='K701' or
+               substr(dx,1,4)='K702' or
+               substr(dx,1,4)='K703' or
+               substr(dx,1,4)='K709' or
+               substr(dx,1,4)='K713' or
+               substr(dx,1,4)='K714' or
+               substr(dx,1,4)='K715' or
+               substr(dx,1,4)='K717' or
+               substr(dx,1,3)='K73' or
+               substr(dx,1,3)='K74' or
+               substr(dx,1,4)='K76' or
+               substr(dx,1,4)='K762' or
+			   substr(dx,1,4)='K763' or
+               substr(dx,1,4)='K764' or
+               substr(dx,1,4)='K768' or
+			   substr(dx,1,4)='K769' or
+               substr(dx,1,4)='Z944')
+			and comorbi_9=0 
+		then comorbi_9=1;	
+*Diabetes without complications ;
+         if(substr(dx,1,4)='2500' or
+               substr(dx,1,4)='2501' or
+               substr(dx,1,4)='2502' or
+               substr(dx,1,4)='2503' or
+               substr(dx,1,4)='2508' or
+               substr(dx,1,4)='2509' or
+			substr(dx,1,4)='E100' or
+		substr(dx,1,4)='E101' or
+		substr(dx,1,4)='E106' or
+		substr(dx,1,4)='E108' or
+		substr(dx,1,4)='E109' or
+		substr(dx,1,4)='E110' or
+        substr(dx,1,4)='E111' or
+		substr(dx,1,4)='E116' or
+		substr(dx,1,4)='E118' or
+		substr(dx,1,4)='E119' or
+		substr(dx,1,4)='E120' or
+		substr(dx,1,4)='E121' or
+		substr(dx,1,4)='E126' or
+		substr(dx,1,4)='E128' or
+		substr(dx,1,4)='E129' or
+		substr(dx,1,4)='E130' or
+		substr(dx,1,4)='E131' or
+		substr(dx,1,4)='E136' or
+		substr(dx,1,4)='E138' or
+        substr(dx,1,4)='E139' or
+		substr(dx,1,4)='E140' or
+		substr(dx,1,4)='E141' or
+		substr(dx,1,4)='E146' or
+		substr(dx,1,4)='E148' or
+		substr(dx,1,4)='E149')
+			and comorbi_10=0 
+		then comorbi_10=1;
+*Diabetes, complicated;
+	if (substr(dx,1,4)='2504' or
+		substr(dx,1,4)='2505' or
+		substr(dx,1,4)='2506' or
+		substr(dx,1,4)='2507' or
+        substr(dx,1,4)='E102' or
+		substr(dx,1,4)='E103' or
+		substr(dx,1,4)='E104' or
+		substr(dx,1,4)='E105' or
+		substr(dx,1,4)='E107' or
+		substr(dx,1,4)='E112' or
+		substr(dx,1,4)='E113' or
+		substr(dx,1,4)='E114' or
+        substr(dx,1,4)='E115' or
+		substr(dx,1,4)='E117' or
+        substr(dx,1,4)='E122' or
+		substr(dx,1,4)='E123' or
+		substr(dx,1,4)='E124' or
+		substr(dx,1,4)='E125' or
+		substr(dx,1,4)='E127' or
+		substr(dx,1,4)='E132' or
+		substr(dx,1,4)='E133' or
+		substr(dx,1,4)='E134' or
+        substr(dx,1,4)='E135' or
+		substr(dx,1,4)='E137' or
+		substr(dx,1,4)='E142' or
+		substr(dx,1,4)='E143' or
+		substr(dx,1,4)='E144' or
+        substr(dx,1,4)='E145' or
+		substr(dx,1,4)='E147')
+			and comorbi_11=0 
+		then comorbi_11=1;
+*Paraplegia and Hemiplegia ;
+	if (substr(dx,1,4)='3341' or
+		substr(dx,1,3)='342' or
+		substr(dx,1,3)='343' or
+		substr(dx,1,4)='3440' or
+		substr(dx,1,4)='3441' or
+		substr(dx,1,4)='3442' or
+		substr(dx,1,4)='3443' or
+                substr(dx,1,4)='3444' or
+		substr(dx,1,4)='3445' or
+		substr(dx,1,4)='3446' or
+		substr(dx,1,4)='3449' or
+		substr(dx,1,4)='G041' or
+		substr(dx,1,4)='G114' or
+		substr(dx,1,4)='G801' or
+		substr(dx,1,4)='G802' or
+		substr(dx,1,3)='G81' or
+		substr(dx,1,3)='G82' or
+		substr(dx,1,4)='G830' or
+        substr(dx,1,4)='G834' or
+		substr(dx,1,4)='G839')
+			and comorbi_12=0 
+		then comorbi_12=1;
+* Renal Disease ;
+	if (substr(dx,1,5)='40301' or
+		substr(dx,1,5)='40311' or
+		substr(dx,1,5)='40391' or
+		substr(dx,1,5)='40402' or
+		substr(dx,1,5)='40403' or
+		substr(dx,1,5)='40412' or
+		substr(dx,1,5)='40413' or
+                substr(dx,1,5)='40492' or
+		substr(dx,1,5)='40493' or
+		substr(dx,1,3)='582' or
+		substr(dx,1,4)='5830' or
+                substr(dx,1,4)='5831' or
+                substr(dx,1,4)='5832' or
+                substr(dx,1,4)='5834' or
+                substr(dx,1,4)='5836' or
+                substr(dx,1,4)='5837' or
+                substr(dx,1,3)='585' or
+                substr(dx,1,3)='586' or
+                substr(dx,1,4)='5880' or
+                substr(dx,1,4)='V420' or
+                substr(dx,1,4)='V451' or
+                substr(dx,1,3)='V56' or
+			substr(dx,1,4)='I120' or
+		substr(dx,1,4)='I131' or
+		substr(dx,1,4)='N032' or
+		substr(dx,1,4)='N033' or
+		substr(dx,1,4)='N034' or
+		substr(dx,1,4)='N035' or
+		substr(dx,1,4)='N036' or
+        substr(dx,1,4)='N037' or
+		substr(dx,1,4)='N052' or
+		substr(dx,1,4)='N053' or
+		substr(dx,1,4)='N054' or
+                substr(dx,1,4)='N055' or
+                substr(dx,1,4)='N056' or
+                substr(dx,1,4)='N057' or
+                substr(dx,1,3)='N18' or
+                substr(dx,1,4)='N19' or
+                substr(dx,1,4)='N250' or
+                substr(dx,1,4)='Z490' or
+                substr(dx,1,4)='Z491' or
+                substr(dx,1,4)='Z492' or
+                substr(dx,1,4)='Z940' or
+                substr(dx,1,3)='Z992' )
+			and comorbi_13=0 
+		then comorbi_13=1;
+*Cancer ;
+	if (substr(dx,1,2)='14' or
+		substr(dx,1,2)='15' or
+		substr(dx,1,2)='16' or
+		substr(dx,1,3)='170' or
+		substr(dx,1,3)='171' or
+		substr(dx,1,3)='172' or
+		substr(dx,1,3)='174' or
+		substr(dx,1,3)='175' or
+		substr(dx,1,3)='176' or
+		substr(dx,1,3)='179' or
+		substr(dx,1,2)='18' or
+		substr(dx,1,3)='190' or
+		substr(dx,1,3)='191' or
+		substr(dx,1,3)='192' or
+		substr(dx,1,3)='193' or
+		substr(dx,1,3)='194' or
+		substr(dx,1,3)='195' or
+                substr(dx,1,3)='200' or
+                substr(dx,1,3)='201' or
+                substr(dx,1,3)='202' or
+                substr(dx,1,3)='203' or
+                substr(dx,1,3)='204' or
+                substr(dx,1,3)='205' or
+                substr(dx,1,3)='206' or
+                substr(dx,1,3)='207' or
+                substr(dx,1,3)='208' or
+                substr(dx,1,3)='2386' or
+			substr(dx,1,3)='C00' or
+		substr(dx,1,3)='C01' or
+		substr(dx,1,3)='C02' or
+		substr(dx,1,3)='C03' or
+		substr(dx,1,3)='C04' or
+		substr(dx,1,3)='C05' or
+		substr(dx,1,3)='C06' or
+		substr(dx,1,3)='C07' or
+		substr(dx,1,3)='C08' or
+		substr(dx,1,3)='C09' or
+		substr(dx,1,3)='C10' or
+		substr(dx,1,3)='C11' or
+		substr(dx,1,3)='C12' or
+		substr(dx,1,3)='C13' or
+		substr(dx,1,3)='C14' or
+		substr(dx,1,3)='C15' or
+		substr(dx,1,3)='C16' or
+		substr(dx,1,3)='C17' or
+		substr(dx,1,3)='C18' or
+		substr(dx,1,3)='C19' or
+		substr(dx,1,3)='C20' or
+		substr(dx,1,3)='C21' or
+		substr(dx,1,3)='C22' or
+		substr(dx,1,3)='C23' or
+		substr(dx,1,3)='C24' or
+		substr(dx,1,3)='C25' or
+		substr(dx,1,3)='C26' or
+		substr(dx,1,3)='C30' or
+		substr(dx,1,3)='C31' or
+		substr(dx,1,3)='C32' or
+		substr(dx,1,3)='C33' or
+		substr(dx,1,3)='C34' or
+		substr(dx,1,3)='C37' or
+		substr(dx,1,3)='C38' or
+		substr(dx,1,3)='C39' or
+		substr(dx,1,3)='C40' or
+		substr(dx,1,3)='C41' or
+		substr(dx,1,3)='C43' or
+		substr(dx,1,3)='C45' or
+		substr(dx,1,3)='C46' or
+		substr(dx,1,3)='C47' or
+		substr(dx,1,3)='C48' or
+		substr(dx,1,3)='C49' or
+		substr(dx,1,3)='C50' or
+		substr(dx,1,3)='C51' or
+		substr(dx,1,3)='C52' or
+		substr(dx,1,3)='C53' or
+		substr(dx,1,3)='C54' or
+		substr(dx,1,3)='C55' or
+		substr(dx,1,3)='C56' or
+		substr(dx,1,3)='C57' or
+		substr(dx,1,3)='C58' or
+		substr(dx,1,3)='C60' or
+		substr(dx,1,3)='C61' or
+		substr(dx,1,3)='C62' or
+		substr(dx,1,3)='C63' or
+		substr(dx,1,3)='C64' or
+		substr(dx,1,3)='C65' or
+		substr(dx,1,3)='C66' or
+		substr(dx,1,3)='C67' or
+		substr(dx,1,3)='C68' or
+		substr(dx,1,3)='C69' or
+		substr(dx,1,3)='C70' or
+		substr(dx,1,3)='C71' or
+		substr(dx,1,3)='C72' or
+		substr(dx,1,3)='C73' or
+		substr(dx,1,3)='C74' or
+		substr(dx,1,3)='C75' or
+		substr(dx,1,3)='C76' or
+                substr(dx,1,3)='C81' or
+                substr(dx,1,3)='C82' or
+                substr(dx,1,3)='C83' or
+                substr(dx,1,3)='C84' or
+                substr(dx,1,3)='C85' or
+                substr(dx,1,3)='C88' or
+                substr(dx,1,3)='C90' or
+                substr(dx,1,3)='C91' or
+                substr(dx,1,3)='C92' or
+                substr(dx,1,3)='C93' or
+                substr(dx,1,3)='C94' or
+                substr(dx,1,3)='C95' or
+                substr(dx,1,3)='C96' or 
+                substr(dx,1,3)='C97')
+			and comorbi_14=0 
+		then comorbi_14=1;
+* Moderate or Severe Liver Disease ;
+	if (substr(dx,1,4)='4560' or
+		substr(dx,1,4)='4561' or
+		substr(dx,1,4)='4562' or
+		substr(dx,1,4)='5722' or
+		substr(dx,1,4)='5723' or
+		substr(dx,1,4)='5724' or
+      	substr(dx,1,4)='5728' or
+		substr(dx,1,4)='I850' or
+		substr(dx,1,4)='I859' or
+		substr(dx,1,4)='I864' or
+		substr(dx,1,4)='I982' or
+		substr(dx,1,4)='K704' or
+		substr(dx,1,4)='K711' or
+		substr(dx,1,4)='K721' or
+        substr(dx,1,4)='K729' or
+        substr(dx,1,3)='K765' or
+        substr(dx,1,3)='K766' or
+        substr(dx,1,3)='K767')
+		and comorbi_15=0 
+		then comorbi_15=1;
+  * Metastatic Carcinoma ;
+	if (substr(dx,1,3)='196' or
+		substr(dx,1,3)='197' or
+		substr(dx,1,3)='198' or
+		substr(dx,1,3)='199' OR
+	substr(dx,1,3)='C77' or
+		substr(dx,1,3)='C78' or
+		substr(dx,1,3)='C79' or
+		substr(dx,1,3)='C80' )
+			and comorbi_16=0 
+		then comorbi_16=1;
+  * AIDS/HIV ;
+	if (substr(dx,1,3)='042' or
+		substr(dx,1,3)='043' or
+		substr(dx,1,3)='044' or
+		substr(dx,1,3)='B20' or
+		substr(dx,1,3)='B21' or
+        substr(dx,1,3)='B22' or
+		substr(dx,1,3)='B24')
+			and comorbi_17=0 
+		then comorbi_17=1;
+
+end;
+run;
+
+/*check sums of each comorbidity for each id*/
+proc sql;
+create table charlson1 as
+select distinct mrn,
+sum(comorbi_1) as com_1,
+sum(comorbi_2) as com_2,
+sum(comorbi_3) as com_3,
+sum(comorbi_4) as com_4,
+sum(comorbi_5) as com_5,
+sum(comorbi_6) as com_6,
+sum(comorbi_7) as com_7,
+sum(comorbi_8) as com_8,
+sum(comorbi_9) as com_9,
+sum(comorbi_10) as com_10,
+sum(comorbi_11) as com_11,
+sum(comorbi_12) as com_12,
+sum(comorbi_13) as com_13,
+sum(comorbi_14) as com_14,
+sum(comorbi_15) as com_15,
+sum(comorbi_16) as com_16,
+sum(comorbi_17) as com_17
+from charlson
+group by mrn;
+quit;
+
+data charlson1;
+set charlson1;
+array list_com com_1-com_17;
+array list_com_bin comorbi_1-comorbi_17;
+
+do over list_com;
+list_com_bin=0;
+if list_com>0 then do;
+list_com_bin=1;
+end;
+end;
+comorb_all=comorbi_1+comorbi_2+comorbi_3+comorbi_4+comorbi_5+comorbi_6+
+comorbi_7+comorbi_8+comorbi_9+comorbi_10+comorbi_11+comorbi_12+comorbi_13+
+comorbi_14+comorbi_15+comorbi_16+comorbi_17;
+*where mrn > .;
+run;
+
+data plist_charlson;
+set charlson1;
+label comorbi_1 ="Congestive Heart Failure";
+label comorbi_2 ="Myocardial Infarction";
+label comorbi_3 ="Peripheral Vascular Disease";
+label comorbi_4 ="Cerebrovascular Disease";
+label comorbi_5 ="Dementia";
+label comorbi_6 ="Chronic Pulmonary Disease";
+label comorbi_7 ="Rheumatic Disease";
+label comorbi_8 ="Peptic Ulcer Disease";
+label comorbi_9 ="Mild Liver Disease";
+label comorbi_10 ="Diabetes, uncomplicated";
+label comorbi_11 ="Diabetes, complicated";
+label comorbi_12 ="Paraplegia and Hemiplegia";
+label comorbi_13 ="Renal Disease";
+label comorbi_14 ="Cancer";
+label comorbi_15 ="Moderate or Severe Liver Disease";
+label comorbi_16 ="Metastatic Carcinoma";
+label comorbi_17 ="AIDS/HIV";
+run;
+
+
+proc freq data=plist_charlson; tables comorb_all; run;
+
+data table1 (keep = mrn comorbi_1--comorb_all);
+set plist_charlson;
+run;
+
+proc sql;
+create table table2 as select a.*,b.age, b.gender, b.smi_qual, b.dart_qual, b.both_qual2
+from table1 a
+inner join cohort b
+on a.mrn=b.mrn;
+quit; 
+
+data table3;
+merge table2 ip_pre ip_post ed_pre ed_post icu_pre icu_post;
+by mrn;
+run;
+
+proc export data=table3 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2.dta" dbms=stata replace; run;
+
+
+H="Opioids"
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_noshow_meds.xlsx" out=meds dbms=xlsx replace;
+sheet="Medications (Opioids)";
+getnames=YES;
+run;
+
+data meds;
+set meds;
+if (find(material_name,'removal','i')>0 or find(material_name,'apomorphine','i')>0) then delete;
+run;
+
+
+data hope.opioids;
+set meds;
+iv_opi = 0;
+anti_tus = 0;
+codeine = 0;
+hydrocodone = 0;
+oxycodone = 0;
+hydromorphone = 0;
+morphine = 0;
+fentanyl = 0;
+meperidine = 0;
+methadone = 0;
+array dx material_name;
+do over dx;
+if(find(dx,'injection','i')>0 or 
+   find(dx,'infusion','i')>0 or
+   find(dx,'PF','i')>0 or
+   find(dx,'IVPB','i')>0)
+   then iv_opi = 1;
+if find(dx,'syringe','i')>0 and find(dx,'oral')=0 then iv_opi = 1;
+if find(dx,'SOL','i')>0 and find(dx,'oral')=0 then iv_opi = 1;
+if(find(dx,'GUAIFENESIN','i')>0 or
+   find(dx,'HOMATROPINE','i')>0 or
+   find(dx,'CHLORPHENIRAMINE','i')>0 or
+   find(dx,'GF','i')>0 or
+   find(dx,'PHENERGAN','i')>0 or
+   find(dx,'PROMETHAZINE','i')>0 )
+   then anti_tus=1;
+if find(dx,'codeine','i')>0 then codeine = 1;
+if find(dx,'hydrocodone','i')>0 then hydrocodone = 1;
+if find(dx,'oxycodone','i')>0 then oxycodone = 1;
+if find(dx,'hydromorphone','i')>0 then hydromorphone = 1;
+if find(dx,'morphine','i')>0 then morphine = 1;
+if find(dx,'fentanyl','i')>0 then fentanyl = 1;
+if find(dx,'meperidine','i')>0 then meperidine = 1;
+if find(dx,'methadone','i')>0 then methadone = 1;
+end;
+run;
+
+data meds1;
+set hope.opioids;
+run;
+
+proc sql;
+create table painmeds_pre as select a.index_date, b.*
+from cohort a
+inner join meds1 b
+on a.mrn = b.mrn and 0<= a.index_date-b.prescription_date <=365;
+quit; 
+
+proc sql;
+create table painmeds_post as select a.index_date, b.*
+from cohort a
+inner join meds1 b
+on a.mrn = b.mrn and 0<b.prescription_date-a.index_date <=365;
+quit; 
+
+
+ proc sql;
+ create table painmeds_pre1 as select distinct mrn,
+ sum(iv_opi) as iv_opi_pre,
+ sum(anti_tus) as anti_tus_pre,
+ sum(codeine) as codeine_pre,
+ sum(hydrocodone) as hydrocodone_pre,
+ sum(oxycodone) as oxycodone_pre,
+ sum(hydromorphone) as hydromorphone_pre,
+ sum(morphine) as morphine_pre,
+ sum(fentanyl) as fentanyl_pre,
+ sum(meperidine) as meperidine_pre,
+ sum(methadone) as methadone_pre
+ from painmeds_pre
+ group by mrn;
+ quit;
+
+ data painmeds_pre1;
+ set painmeds_pre1;
+ array meds iv_opi_pre--methadone_pre;
+ do over meds;
+ if meds>0 then meds=1;
+ end;
+ run;
+
+
+ proc sql;
+ create table painmeds_post1 as select distinct mrn,
+ sum(iv_opi) as iv_opi_post,
+ sum(anti_tus) as anti_tus_post,
+ sum(codeine) as codeine_post,
+ sum(hydrocodone) as hydrocodone_post,
+ sum(oxycodone) as oxycodone_post,
+ sum(hydromorphone) as hydromorphone_post,
+ sum(morphine) as morphine_post,
+ sum(fentanyl) as fentanyl_post,
+ sum(meperidine) as meperidine_post,
+ sum(methadone) as methadone_post
+ from painmeds_post
+ group by mrn;
+ quit;
+
+ data painmeds_post1;
+ set painmeds_post1;
+ array meds iv_opi_post--methadone_post;
+ do over meds;
+ if meds>0 then meds=1;
+ end;
+ run;
+
+ proc export data=painmeds_pre1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_pre.dta" dbms=stata replace; run;
+  proc export data=painmeds_post1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta" dbms=stata replace; run;
+
+H="Table 1+2"
+use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_1yrback.dta", clear
+
+label var smi_qual "SMI Qualified"
+label var dart_qual "Multimorbidity Qualified"
+label var both_qual2 "SMI+MM dual Qualified"
+gen all = 1
+
+local ivars smi_dem smi_cancer smi_esrd smi_chf smi_copd smi_ald smi_hiv smi_als smi_hip smi_diab_comp dart_cancer dart_copd dart_cad dart_chf dart_pvd dart_cld dart_diab dart_renal dart_dem 
+local rd: word count `ivars' 1
+di `rd'
+
+
+mat tab1=J(`rd',4,.)
+
+local r = 1
+
+foreach x of local ivars {
+
+qui sum `x' if smi_qual==1
+mat tab1[`r',1]=r(mean)*100
+
+qui sum `x' if dart_qual==1
+mat tab1[`r',2]=r(mean)*100
+
+qui sum `x' if both_qual2==1
+mat tab1[`r',3]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab1[`r',4]=r(mean)*100
+local ++r
+}
+
+sum smi_qual
+mat tab1[`r',1]=r(sum)
+
+sum dart_qual
+mat tab1[`r',2]=r(sum)
+
+sum both_qual2
+mat tab1[`r',3]=r(sum)
+
+sum all
+mat tab1[`r',4]=r(sum)
+
+mat rownames tab1 = `ivars' "Sample Size (n)"
+
+frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\table3.doc", replace statmat(tab1) ///
+varlabels title("HoPe Project: Diagnosis Distribution, 12m Look Back From Index Visit") ctitles("" "SMI Qualified (%)" "Dartmouth MM Qualified (%)" "Dual SMI/Dartmouth (%)" "All (%)") sdec(2) ///
+note("Look back period includes the index visit. Dual SMI/MM qualification occurs if they simultaneously meet both criteria on their index visit")
+
+use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2.dta", clear
+merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_pre.dta", keepus(iv_opi_pre anti_tus_pre codeine_pre hydrocodone_pre oxycodone_pre hydromorphone_pre morphine_pre fentanyl_pre meperidine_pre methadone_pre)
+cap drop _m
+merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta", keepus(iv_opi_post anti_tus_post codeine_post hydrocodone_post oxycodone_post hydromorphone_post morphine_post fentanyl_post meperidine_post methadone_post)
+cap drop _m
+
+gen all = 1
+
+gen female = 0
+replace female = 1 if gender=="Female"
+label var female "Female"
+
+gen comorb_2 = 0
+replace comorb_2 = 1 if comorb_all<3
+label var comorb_2 "0-2 Charlson Comorbidities"
+
+gen comorb_6 = 0
+replace comorb_6 = 1 if comorb_all>=3 & comorb_all<=6
+label var comorb_6 "3-6 Charlson Comorbidities"
+
+gen comorb_10 = 0
+replace comorb_10 = 1 if comorb_all>=7 & comorb_all<=10
+label var comorb_10 "7-10 Charlson Comorbidities"
+
+label var age "Mean Age"
+label var ip_admit "Inpatient Admit 12m before (including index date)"
+label var ip_admit_p "Inpatient Admit 12m post (excluding index date)"
+
+label var icu_admit "ICU Admit 12m before (including index date)"
+label var icu_admit_p "ICU Admit 12m post (excluding index date)"
+
+label var ed_visit "ED Visit 12m before (including index date)"
+label var ed_visit_p "ED Visit 12m post (excluding index date)"
+
+label var iv_opi_pre "IV Opioids 12m pre"
+label var anti_tus_pre "Anti-Tussive 12m pre"
+label var codeine_pre "Codeine 12m pre"
+label var hydrocodone_pre "Hydrocodone 12m pre" 
+label var oxycodone_pre "Oxycodone 12m pre" 
+label var hydromorphone_pre "Hydromorphone 12m pre" 
+label var morphine_pre "Morphine 12m pre"
+label var fentanyl_pre "Fentanyl 12m pre"
+label var meperidine_pre "Meperidine 12m pre"
+label var methadone_pre "Methadone 12m pre"
+
+label var iv_opi_post "IV Opioids 12m post"
+label var anti_tus_post "Anti-Tussive 12m post"
+label var codeine_post "Codeine 12m post"
+label var hydrocodone_post "Hydrocodone 12m post" 
+label var oxycodone_post "Oxycodone 12m post" 
+label var hydromorphone_post "Hydromorphone 12m post" 
+label var morphine_post "Morphine 12m post"
+label var fentanyl_post "Fentanyl 12m post"
+label var meperidine_post "Meperidine 12m post"
+label var methadone_post "Methadone 12m post"
+
+local util ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p 
+
+foreach x of local util {
+replace `x' = 0 if `x'==.
+}
+
+
+local ivars comorbi_1 comorbi_2 comorbi_3 comorbi_4 comorbi_5 comorbi_6 comorbi_7 ///
+comorbi_8 comorbi_9 comorbi_10 comorbi_11 comorbi_12 comorbi_13 comorbi_14 comorbi_15 comorbi_16 comorbi_17 comorb_2 comorb_6 comorb_10 
+local ivars2 ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p female
+local ivars3 iv_opi_pre anti_tus_pre hydrocodone_pre oxycodone_pre hydromorphone_pre ///
+morphine_pre fentanyl_pre meperidine_pre methadone_pre iv_opi_post anti_tus_post ///
+codeine_post hydrocodone_post oxycodone_post hydromorphone_post morphine_post fentanyl_post meperidine_post methadone_post
+local rd: word count `ivars' `ivars2' `ivars3' 1 1 1 1 1
+mat tab2=J(`rd',4,.)
+local r = 2
+foreach x of local ivars {
+
+qui sum `x' if smi_qual==1
+mat tab2[`r',1]=r(mean)*100
+
+qui sum `x' if dart_qual==1
+mat tab2[`r',2]=r(mean)*100
+
+qui sum `x' if both_qual==1
+mat tab2[`r',3]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',4]=r(mean)*100
+local ++r
+}
+local ++r
+
+foreach x of local ivars2 {
+
+qui sum `x' if smi_qual==1
+mat tab2[`r',1]=r(mean)*100
+
+qui sum `x' if dart_qual==1
+mat tab2[`r',2]=r(mean)*100
+
+qui sum `x' if both_qual==1
+mat tab2[`r',3]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',4]=r(mean)*100
+local ++r
+}
+
+local ++r
+
+foreach x of local ivars3 {
+
+qui sum `x' if smi_qual==1
+mat tab2[`r',1]=r(mean)*100
+
+qui sum `x' if dart_qual==1
+mat tab2[`r',2]=r(mean)*100
+
+qui sum `x' if both_qual==1
+mat tab2[`r',3]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',4]=r(mean)*100
+local ++r
+}
+
+
+
+qui sum age if smi_qual==1
+mat tab2[`r',1]=r(mean)
+
+qui sum age if dart_qual==1
+mat tab2[`r',2]=r(mean)
+
+qui sum age if both_qual==1
+mat tab2[`r',3]=r(mean)
+
+qui sum age if all==1
+mat tab2[`r',4]=r(mean)
+local ++r
+
+
+
+
+qui sum age if smi_qual==1
+mat tab2[`r',1]=r(N)
+
+qui sum age if dart_qual==1
+mat tab2[`r',2]=r(N)
+
+qui sum age if both_qual==1
+mat tab2[`r',3]=r(N)
+
+qui sum age if all==1
+mat tab2[`r',4]=r(N)
+local ++r
+
+mat rownames tab2 = "Charlson Comorbidities 12m pre" `ivars' "Utilization" `ivars2' "Opioids" `ivars3' "Mean Age" "Sample Size"
+matlist tab2
+
+frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\table3.doc", addtable statmat(tab2) ///
+varlabels title("HoPe Project: Comorbidities, Utilization and Opioids ") ctitles("" "SMI Qualified (%)" "Dartmouth MM Qualified (%)" "Dual SMI/Dartmouth (%)" "All (%)") sdec(2) ///
+note("12m Look back period includes the index visit. Dual SMI/MM qualification occurs if they simultaneously meet both criteria on their index visit")
