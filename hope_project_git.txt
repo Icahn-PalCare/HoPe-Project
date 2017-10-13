@@ -5,7 +5,13 @@ libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
 libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
 
 
+H="/********/"
+
+
 H="Identifying qualified SMI/MM Jan-Sept 2015"
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
 /* Import Spreadsheet */
 
 proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17.xlsx" out=demographics dbms=xlsx replace; 
@@ -29,22 +35,13 @@ format date date10.;
 mrn1 = input(mrn, best12.);
 run;
 
-data encounterlist;
+data encounterlist; /* First 9 months of 2015 */
 set encounterlist;
 where month(date)<=9;
 run;
 
-data dob1;
-set dob1 (rename=(date_of_birth = dob)); 
-mrn = input(medical_record_number, best12.);
-benchmark=MDY(1,1,2015);
-age = (benchmark-dob)/365.25;
-age = round(age);
-run;
 
-proc export data=dob1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" dbms=csv replace; run;
-
-/* Identify >=65
+/* Identify >=21 and Manhattan Residents  */
 
 proc sql;
 create table demo1 as select a.*, b.zip, b.gender, b.insurance
@@ -58,21 +55,16 @@ data demo1;
 set demo1;
 zip1 = substr(zip,1,3);
 run;
-*/
+
 
 data demo1; /* cut sample */
-set dob1;
-where age>=65;
-run;
-
-/*
-data demo1;
 set demo1;
-where mrn not in (1229149,2077348,2433995,7591684); /* removing people who have no smi/mm 
+manhattan = 0;
+if zip1=100 then manhattan = 1;
+if zip="10128" or zip="10280" then manhattan=1;
+where age>=21;
 run;
 
-proc export data=demo1 (keep=mrn dob) outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mrnlist.csv" dbms=csv replace; run; /*mrn list
-*/
 
 proc sql;
 create table sample as select a.*, b.date, b.msdw_encounter_type, b.icd9_code, b.diagnosis_description
@@ -1241,6 +1233,7 @@ label dart_cld = "Dartmouth - Chronic Liver Disease";
 label dart_diab = "Dartmouth - Diabetes w/End Organ Damage";
 label dart_renal = "Dartmouth - Renal Failure";
 label dart_dem = "Dartmouth - Dementia";
+label ind_multi = "Darthmouth Multimorbidity";
 run;
 
 H="Identifying index visit"
@@ -1450,6 +1443,14 @@ inner join criteria2 b
 on a.mrn=b.mrn;
 quit;
 
+proc sql;
+create table final1 as select a.*, b.age, b.manhattan, b.gender
+from final a
+inner join demo1 b
+on a.mrn = b.mrn;
+quit;
+
+
 
 /*
 
@@ -1467,7 +1468,7 @@ quit;
 */
 
 data hope.criteria_met_9m (drop = smi_rd smi_ihd smi_pvd ICD9_CODE dx_code);
-set final;
+set final1;
 both_qual2 = 0;
 if both_qual = 1 and any_smi>=1 and any_dart=0 then smi_qual = 1;
 if both_qual = 1 and any_smi=0 and any_dart>0 then dart_qual = 1;
@@ -1498,12 +1499,19 @@ proc freq data=hope.criteria_met_9m; tables smi_qual dart_qual both_qual2; run;
 /* proc export data=work.unique_mrn outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\evan\unique_mrn_9m.csv" dbms=csv replace; run; */
 proc export data=hope.criteria_met_9m outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_9m.dta" replace; run;
 
-data hope.index_date (keep=mrn index_date smi_qual dart_qual both_qual2);
+data hope.index_date2 (keep=mrn index_date smi_qual dart_qual both_qual2);
 set hope.criteria_met_9m (rename=(date = index_date));
 run;
 
 
+H="/*******/"
+
+
 H="1 year look back for SMI/MM"
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
+
 proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\problemlist.csv" out=problemlist dbms=csv replace;
 	 getnames=YES;
 	 run;
@@ -1517,12 +1525,12 @@ proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley res
 	getnames=YES;
 	run;
 
-proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
-	 getnames=YES;
-	 run;
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_util.csv" out=util dbms=csv replace;
+getnames=YES;
+run;
 
 data cohort;
-set hope.index_date;
+set hope.index_date2;
 run;
 
 data util;
@@ -1925,7 +1933,7 @@ and diagnosis_description = 'Principal'
 and msdw_encounter_type='Inpatient'
 and smi_chf = 0
 then smi_chf = 1;
-/* ICD 9 - COPD */
+/* ICD 9 - COPD */   
 if(substr(dx,1,3)='490' or
 substr(dx,1,4)='4910'   or
 substr(dx,1,4)='4911'   or
@@ -1968,7 +1976,24 @@ substr(dx,1,3)='502'    or
 substr(dx,1,3)='503'    or
 substr(dx,1,3)='504'    or
 substr(dx,1,3)='505'    or
-substr(dx,1,4)='5064'   )
+substr(dx,1,4)='5064'  or
+substr(dx,1,5)='49392' or
+substr(dx,1,3)='515' or
+substr(dx,1,4)='5160' or
+substr(dx,1,4)='5161' or
+substr(dx,1,4) ='5164' or
+substr(dx,1,4) = '5165' or
+substr(dx,1,4) = '5168' or
+substr(dx,1,4) = '5169' or
+substr(dx,1,5) = '51630' or 
+substr(dx,1,5) = '51631' or 
+substr(dx,1,5) = '51632' or 
+substr(dx,1,5) = '51634' or
+substr(dx,1,5) = '51635' or
+substr(dx,1,5) = '51636' or
+substr(dx,1,5) = '51637' or
+substr(dx,1,5) = '51883' or
+substr(dx,1,5) = '51884')
 /* ICD 10 - COPD 
 substr(dx,1,3)=	'J40'	    or
 substr(dx,1,4)=	'J410'	or
@@ -2671,9 +2696,16 @@ inner join criteria1 b
 on a.mrn = b.mrn;
 quit;
 
+proc sql;
+create table criteria2a as select a.*, b.gender
+from criteria2 a
+inner join demographics b
+on a.mrn = b.mrn;
+quit;
 
-data  hope.criteria_met_1yrback; /* Our final cohort - Comprehensive DX list for first 9months of 2015*/
-set criteria2;
+
+data  hope.criteria_met_1yrback; /* Our final cohort - Comprehensive DX list for 1 year pre index*/
+set criteria2a;
 label smi_dem = "SMI - Dementia";
 label smi_cancer = "SMI - Cancer";
 label smi_esrd = "SMI - End Stage Renal Disease";
@@ -2716,11 +2748,12 @@ proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley res
 	getnames=YES;
 	run;
 
-proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
-	 getnames=YES;
-	 run;
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_util.csv" out=util dbms=csv replace;
+getnames=YES;
+run;
 
 
+/* Charlson Comorbidities 1yr pre-index from billing and problemlist */
 
 data dob_list;
 set dob_list;
@@ -2734,81 +2767,32 @@ run;
 */
 
 data cohort;
-set hope.index_date;
+set hope.index_date2;
+mrn1 = input(mrn, best12.);
 run;
+
 
 proc sql;
 create table cohort1 as select a.*, b.age
 from cohort a
 inner join dob_list b
-on a.mrn = b.mrn;
+on a.mrn1 = b.mrn;
 quit;
 
 proc sql;
 create table cohort2 as select a.*, b.gender
 from cohort1 a
 inner join demographics b
-on a.mrn = b.mrn;
+on a.mrn1 = b.mrn;
 quit;
 
-data cohort;
+data cohort (drop = mrn);
 set cohort2;
 run;
 
-
-/*
-proc sql;
-create table cohort1 as select a.*, b.dob
-from cohort a
-inner join dob_list b
-on a.mrn = b.mrn;
-quit;
-
-proc sql;
-create table cohort2 as select a.*, b.gender, b.zip, b.insurance
-from cohort1 a
-inner join demographics b
-on a.mrn=b.mrn;
-quit;
-
-
-data cohort (rename=(date = index_date));
+data cohort (rename=(mrn1 = mrn));
 set cohort;
 run;
-
-/*spss stuff
-
-data cohort_spss (drop = com_sdem--com_ddem smi_ihd smi_pvd smi_rd ind_dem ind_multi benchmark);
-set cohort;
-run;
-
-proc export data=cohort_spss outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\spss\9_12_17\cohort_demo.sav" dbms=spss replace; run;
-
-proc import datafile="C:\Users\rahmao03\Downloads\utilization.csv" out=util dbms=csv replace;
-	 getnames=YES;
-	 run;
-proc import datafile="Amy Kelley results 8-23-17_dme_vns_dnr.xlsx" out=dme dbms=excel replace;
-sheet="DME Orders";
-getnames=YES;
-	 run;
-
-
-data util;
-set util;
-mrn1 = input(mrn, best12.);
-run;
-
-proc sql;
-create table util_spss as select
-a.mrn, b.*
-from cohort_spss a
-inner join util b
-on a.mrn = b.mrn1;
-quit;
-
-proc export data=util_spss outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\spss\9_12_17\utilization.sav" dbms=spss replace; run;
-
- */
 
 data util;
 set util;
@@ -2819,7 +2803,7 @@ run;
 
 
 proc sql;
-create table problemlist_3k as select a.*, b.*
+create table problemlist_3k as select a.*, b.* /* Problem list 1 year pre index */
 from cohort a
 inner join problemlist b
 on a.mrn = b.mrn and 0 <= a.index_date - b.diagnosis_date <=365;
@@ -2827,7 +2811,7 @@ quit;
 
 
 proc sql;
-create table problemlist_3ak as select a.*, b.*
+create table problemlist_3ak as select a.*, b.* /*billing data 1 year pre index */
 from cohort a
 inner join util b 
 on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365;
@@ -3515,7 +3499,7 @@ set plist_charlson;
 run;
 
 proc sql;
-create table table2 as select a.*,b.age, b.gender, b.smi_qual, b.dart_qual, b.both_qual2
+create table table2 as select a.*,b.age, b.gender, b.smi_qual, b.dart_qual
 from table1 a
 inner join cohort b
 on a.mrn=b.mrn;
@@ -3526,8 +3510,7 @@ merge table2 ip_pre ip_post ed_pre ed_post icu_pre icu_post;
 by mrn;
 run;
 
-proc export data=table3 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2.dta" dbms=stata replace; run;
-
+proc export data=table3 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2_test.dta" dbms=stata replace; run;
 
 H="Opioids"
 proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_noshow_meds.xlsx" out=meds dbms=xlsx replace;
@@ -3586,7 +3569,7 @@ run;
 
 proc sql;
 create table painmeds_pre as select a.index_date, b.*
-from cohort a
+from hope.index_date2 a
 inner join meds1 b
 on a.mrn = b.mrn and 0<= a.index_date-b.prescription_date <=365;
 quit; 
@@ -3649,64 +3632,371 @@ quit;
  run;
 
  proc export data=painmeds_pre1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_pre.dta" dbms=stata replace; run;
-  proc export data=painmeds_post1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta" dbms=stata replace; run;
+ proc export data=painmeds_post1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta" dbms=stata replace; run;
 
-H="Table 1+2"
+H="VNS + DNR Orders"
+/*VNS and DNR */
+
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_dme_vns_dnr.xlsx" out=hope.vns
+dbms=xlsx replace; sheet="VNS Orders"; getnames=YES; run;
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_dme_vns_dnr.xlsx" out=hope.dnr
+dbms=xlsx replace; sheet="DNR Orders"; getnames=YES; run;
+
+
+
+proc freq data=hope.vns; tables procedure_description; run;
+proc freq data=hope.dnr; tables procedure_description; run;
+
+data hope.vns;
+set hope.vns;
+admit = 0;
+con_visdoc = 0;
+con_visnurse = 0;
+con_visfalls = 0;
+disch = 0;
+famvis = 0;
+ip_visdoc = 0;
+ip_visnurse = 0;
+soc_vns = 0;
+if procedure_description = "ADMIT TO MOUNT SINAI VNS HOSPICE" then admit = 1;
+if procedure_description = "CONSULT TO VISITING DOCTORS" then con_visdoc = 1;
+if procedure_description = "CONSULT TO VISITING NURSE SERVICE" then con_visnurse=1;
+if procedure_description = "CONSULT TO VNS FALLS STRONG PROGRAM" then con_visfalls=1;
+if procedure_description = "DISCHARGE PATIENT TO MOUNT SINAI VNS HOSPICE" then disch=1;
+if procedure_description = "DO NOT RESTRICT FAMILY VISITING HOURS" then famvis = 1;
+if procedure_description = "IP CONSULT TO VISITING DOCTORS" then ip_visdoc = 1;
+if procedure_description = "IP CONSULT TO VISITING NURSE SERVICE" then ip_visnurse = 1;
+if procedure_description = "SOCIAL WORK CONSULT TO VISITING NURSE SERVICE" then soc_vns=1;
+run;
+
+data hope.dnr;
+set hope.dnr;
+dnr = 0;
+dnr_dni = 0;
+if procedure_description = "DNR (DO NOT RESUSCITATE)" then dnr = 1;
+if procedure_description = "DNR/DNI (DO NOT RESUSCITATE/DO NOT INTUBATE)" then dnr_dni = 1;
+run;
+
+
+
+proc sql;
+create table vns_after as select a.*, b.*
+from hope.vns a
+inner join hope.index_date2 b
+on a.mrn=b.mrn 
+and
+0 <a.order_date - b.index_date<=365;
+quit;
+
+
+proc sql;
+create table vns_after_1 as select distinct mrn,
+sum(admit) as com_admit_p1,
+sum(con_visdoc) as com_con_visdoc_p1,
+sum(con_visnurse) as com_con_visnurse_p1,
+sum(con_visfalls) as com_con_visfalls_p1,
+sum(disch) as com_disch_p1,
+sum(famvis) as com_famvis_p1,
+sum(ip_visdoc) as com_ip_visdoc_p1, 
+sum(ip_visnurse) as com_ip_visnurse_p1,
+sum(soc_vns) as com_soc_vns_p1
+from vns_after
+group by mrn;
+quit;
+
+
+
+proc sql;
+create table vns_b4 as select a.*, b.*
+from hope.vns a
+inner join hope.index_date b
+on a.mrn=b.mrn 
+and
+0 <=b.index_date-a.order_date<=365;
+quit;
+
+proc sql;
+create table vns_b4_1 as select distinct mrn,
+sum(admit) as com_admit_n1,
+sum(con_visdoc) as com_con_visdoc_n1,
+sum(con_visnurse) as com_con_visnurse_n1,
+sum(con_visfalls) as com_con_visfalls_n1,
+sum(disch) as com_disch_n1,
+sum(famvis) as com_famvis_n1,
+sum(ip_visdoc) as com_ip_visdoc_n1, 
+sum(ip_visnurse) as com_ip_visnurse_n1,
+sum(soc_vns) as com_soc_vns_n1
+from vns_b4
+group by mrn;
+quit;
+
+
+
+proc sql;
+create table dnr_after as select a.*, b.*
+from hope.dnr a
+inner join hope.index_date b
+on a.mrn=b.mrn 
+and
+0 <a.order_date - b.index_date<=365;
+quit;
+
+proc sql;
+create table dnr_after_1 as select distinct mrn,
+sum(dnr) as com_dnr_p1,
+sum(dnr_dni) as com_dnr_dni_p1
+from dnr_after
+group by mrn;
+quit;
+
+
+proc sql;
+create table dnr_b4 as select a.*, b.*
+from hope.dnr a
+inner join hope.index_date b
+on a.mrn=b.mrn 
+and
+0 <=b.index_date-a.order_date<=365;
+quit;
+
+proc sql;
+create table dnr_b4_1 as select distinct mrn,
+sum(dnr) as com_dnr_n1,
+sum(dnr_dni) as com_dnr_dni_n1
+from dnr_b4
+group by mrn;
+quit;
+
+data vns_b4_1;
+set vns_b4_1;
+label com_admit_n1        = "ADMIT TO MOUNT SINAI VNS HOSPICE";
+label com_con_visdoc_n1 = "CONSULT TO VISITING DOCTORS";
+label com_con_visnurse_n1 = "CONSULT TO VISITING NURSE SERVICE";
+label com_con_visfalls_n1 = "CONSULT TO VNS FALLS STRONG PROGRAM";
+label com_disch_n1 = "DISCHARGE PATIENT TO MOUNT SINAI VNS HOSPICE";
+label com_famvis_n1 = "DO NOT RESTRICT FAMILY VISITING HOURS";
+label com_ip_visdoc_n1  = "IP CONSULT TO VISITING DOCTORS";
+label com_ip_visnurse_n1 = "IP CONSULT TO VISITING NURSE SERVICE";
+label com_soc_vns_n1      = "SOCIAL WORK CONSULT TO VISITING NURSE SERVICE";
+run;
+
+data vns_after_1;
+set vns_after_1;
+label com_admit_p1        = "ADMIT TO MOUNT SINAI VNS HOSPICE";
+label com_con_visdoc_p1 = "CONSULT TO VISITING DOCTORS";
+label com_con_visnurse_p1 = "CONSULT TO VISITING NURSE SERVICE";
+label com_con_visfalls_p1 = "CONSULT TO VNS FALLS STRONG PROGRAM";
+label com_disch_p1 = "DISCHARGE PATIENT TO MOUNT SINAI VNS HOSPICE";
+label com_famvis_p1 = "DO NOT RESTRICT FAMILY VISITING HOURS";
+label com_ip_visdoc_p1  = "IP CONSULT TO VISITING DOCTORS";
+label com_ip_visnurse_p1 = "IP CONSULT TO VISITING NURSE SERVICE";
+label com_soc_vns_p1      = "SOCIAL WORK CONSULT TO VISITING NURSE SERVICE";
+run;
+
+data dnr_b4_1;
+set dnr_b4_1;
+label com_dnr_n1 = "DNR (DO NOT RESUSCITATE)";
+label com_dnr_dni_n1 = "DNR/DNI (DO NOT RESUSCITATE/DO NOT INTUBATE)";
+run;
+
+data dnr_after_1;
+set dnr_after_1;
+label com_dnr_p1 = "DNR (DO NOT RESUSCITATE)";
+label com_dnr_dni_p1 = "DNR/DNI (DO NOT RESUSCITATE/DO NOT INTUBATE)";
+run;
+
+
+
+
+proc export data=vns_b4_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\vns_b4.dta" dbms=stata replace; run;
+proc export data=vns_after_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\vns_after.dta" dbms=stata replace; run;
+proc export data=dnr_b4_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dnr_b4.dta" dbms=stata replace; run;
+proc export data=dnr_after_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dnr_after.dta" dbms=stata replace; run;
+
+
+H="DME"
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_dme_vns_dnr.xlsx" out=dme dbms=xlsx replace; sheet="DME Orders"; getnames=YES; run;
+
+data dme;
+set dme;
+if procedure_code in:(175421,175422) then delete;
+run;
+
+data index_date;
+set hope.index_date2;
+run;
+
+proc sql;
+create table dmeb4_index as select a.*, b.*
+from index_date a
+inner join dme b
+on a.mrn=b.mrn and 0 <=a.index_date-b.order_date<=365;
+quit;
+
+
+proc sql;
+create table dme_indexp1 as select a.*, b.*
+from index_date a
+inner join dme b
+on a.mrn=b.mrn and 0 <b.order_date-a.index_date<=365;
+quit;
+
+
+data dmeb4_index (keep = mrn toilet_n1--transfer_n1);
+set dmeb4_index;
+toilet_n1=0;
+bathing_n1=0;
+walking_n1=0;
+wheelchair_n1=0;
+transfer_n1=0;
+if procedure_code in:(9742,9743,9744,9787,9788,9791,33290) then toilet_n1= 1;
+if procedure_code in:(9745,9748,9749,9750,9751,9789,9790) then bathing_n1=1;
+if procedure_code in:(8317,9724,9725,9726,9728,9729,9732,9733,9734,9738,9741,10934,33223,159037,160568) then walking_n1 = 1;
+if procedure_code in:(10699,10698,10700,151955,10697,159047,9978,10020,152804,10006,10695,10693,10015,9993,10035) then wheelchair_n1=1;
+if procedure_code in:(33298,9792,157617) then transfer_n1=1;
+run;
+
+data dme_indexp1 (keep = mrn toilet_p1--transfer_p1);
+set dme_indexp1;
+toilet_p1=0;
+bathing_p1=0;
+walking_p1=0;
+wheelchair_p1=0;
+transfer_p1=0;
+if procedure_code in:(9742,9743,9744,9787,9788,9791,33290) then toilet_p1= 1;
+if procedure_code in:(9745,9748,9749,9750,9751,9789,9790) then bathing_p1=1;
+if procedure_code in:(8317,9724,9725,9726,9728,9729,9732,9733,9734,9738,9741,10934,33223,159037,160568) then walking_p1 = 1;
+if procedure_code in:(10699,10698,10700,151955,10697,159047,9978,10020,152804,10006,10695,10693,10015,9993,10035) then wheelchair_p1=1;
+if procedure_code in:(33298,9792,157617) then transfer_p1=1;
+run;
+
+
+
+proc sql;
+ create table dme_n1 as select distinct mrn,
+ sum(toilet_n1) as toilet_n1,
+ sum(bathing_n1) as bathing_n1,
+ sum(walking_n1) as walking_n1,
+ sum(wheelchair_n1) as wheelchair_n1,
+ sum(transfer_n1) as transfer_n1
+ from dmeb4_index
+ group by mrn;
+ quit;
+
+ proc sql;
+ create table dme_p1 as select distinct mrn,
+ sum(toilet_p1) as toilet_p1,
+ sum(bathing_p1) as bathing_p1,
+ sum(walking_p1) as walking_p1,
+ sum(wheelchair_p1) as wheelchair_p1,
+ sum(transfer_p1) as transfer_p1
+ from dme_indexp1
+ group by mrn;
+ quit;
+
+
+
+
+
+proc export data=dme_n1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dme_n1.dta" dbms=stata replace; run;
+
+
+
+
+proc export data=dme_p1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dme_p1.dta" dbms=stata replace; run;
+
+
+H="Summary Tables: DX, Comorbs, Utils, Opioids, etc."
 use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_1yrback.dta", clear
 
-label var smi_qual "SMI Qualified"
-label var dart_qual "Multimorbidity Qualified"
-label var both_qual2 "SMI+MM dual Qualified"
+cap drop _m
+merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_9m.dta", keepus(age manhattan)
+cap drop _m
+
+label var ind_multi "Multimorbidity"
+
+gen age21_64 = 0
+replace age21_64 = 1 if age<65
+
+
+gen age_65 = 0
+replace age_65 = 1 if age>=65
+
 gen all = 1
 
-local ivars smi_dem smi_cancer smi_esrd smi_chf smi_copd smi_ald smi_hiv smi_als smi_hip smi_diab_comp dart_cancer dart_copd dart_cad dart_chf dart_pvd dart_cld dart_diab dart_renal dart_dem 
+
+local ivars smi_dem smi_cancer smi_esrd smi_chf smi_copd smi_ald smi_hiv smi_als smi_hip smi_diab_comp ind_multi
 local rd: word count `ivars' 1
 di `rd'
 
 
-mat tab1=J(`rd',4,.)
+mat tab1=J(`rd',5,.)
 
 local r = 1
 
 foreach x of local ivars {
 
-qui sum `x' if smi_qual==1
+qui sum `x' if age21_64==1
 mat tab1[`r',1]=r(mean)*100
 
-qui sum `x' if dart_qual==1
+qui sum `x' if age_65==1
 mat tab1[`r',2]=r(mean)*100
 
-qui sum `x' if both_qual2==1
+qui sum `x' if manhattan==1
 mat tab1[`r',3]=r(mean)*100
 
-qui sum `x' if all==1
+qui sum `x' if manhattan==0
 mat tab1[`r',4]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab1[`r',5]=r(mean)*100
+
 local ++r
 }
 
-sum smi_qual
+sum age21_64
 mat tab1[`r',1]=r(sum)
 
-sum dart_qual
+sum age_65 
 mat tab1[`r',2]=r(sum)
 
-sum both_qual2
+sum manhattan 
 mat tab1[`r',3]=r(sum)
 
+sum manhattan if manhattan==0
+mat tab1[`r',4]=r(N)
+
 sum all
-mat tab1[`r',4]=r(sum)
+mat tab1[`r',5]=r(sum)
 
-mat rownames tab1 = `ivars' "Sample Size (n)"
+mat rownames tab1 = `ivars' "Sample Size (n)" 
 
-frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\table3.doc", replace statmat(tab1) ///
-varlabels title("HoPe Project: Diagnosis Distribution, 12m Look Back From Index Visit") ctitles("" "SMI Qualified (%)" "Dartmouth MM Qualified (%)" "Dual SMI/Dartmouth (%)" "All (%)") sdec(2) ///
-note("Look back period includes the index visit. Dual SMI/MM qualification occurs if they simultaneously meet both criteria on their index visit")
+mat list tab1
 
-use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2.dta", clear
+frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\tables_revised.doc", replace statmat(tab1) ///
+varlabels title("HoPe Project: Diagnosis Distribution, 12m Look Back From Index Visit") ctitles("" "Age 21-64 (%)" "Age 65+ (%)" "Manhattan (%)" "Not Manhattan(%)" "All (%)") sdec(2) ///
+note("Index date determined by first occurance of qualifying ICD-9 diagnosis codes from Jan-Sept 2015 billing data")
+
+use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2_test.dta", clear
 merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_pre.dta", keepus(iv_opi_pre anti_tus_pre codeine_pre hydrocodone_pre oxycodone_pre hydromorphone_pre morphine_pre fentanyl_pre meperidine_pre methadone_pre)
 cap drop _m
 merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta", keepus(iv_opi_post anti_tus_post codeine_post hydrocodone_post oxycodone_post hydromorphone_post morphine_post fentanyl_post meperidine_post methadone_post)
 cap drop _m
+
+cap drop _m
+merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_9m.dta", keepus(manhattan)
+cap drop _m
+
+
+gen age21_64 = 0
+replace age21_64 = 1 if age<65
+
+gen age_65 = 0
+replace age_65 = 1 if age>=65
 
 gen all = 1
 
@@ -3764,46 +4054,76 @@ foreach x of local util {
 replace `x' = 0 if `x'==.
 }
 
+gen any_opi_pre = 0
+gen any_opi_post = 0
+
 
 local ivars comorbi_1 comorbi_2 comorbi_3 comorbi_4 comorbi_5 comorbi_6 comorbi_7 ///
 comorbi_8 comorbi_9 comorbi_10 comorbi_11 comorbi_12 comorbi_13 comorbi_14 comorbi_15 comorbi_16 comorbi_17 comorb_2 comorb_6 comorb_10 
 local ivars2 ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p female
 local ivars3 iv_opi_pre anti_tus_pre hydrocodone_pre oxycodone_pre hydromorphone_pre ///
-morphine_pre fentanyl_pre meperidine_pre methadone_pre iv_opi_post anti_tus_post ///
-codeine_post hydrocodone_post oxycodone_post hydromorphone_post morphine_post fentanyl_post meperidine_post methadone_post
+morphine_pre fentanyl_pre meperidine_pre methadone_pre any_opi_pre iv_opi_post anti_tus_post ///
+codeine_post hydrocodone_post oxycodone_post hydromorphone_post morphine_post fentanyl_post meperidine_post methadone_post any_opi_post
 local rd: word count `ivars' `ivars2' `ivars3' 1 1 1 1 1
-mat tab2=J(`rd',4,.)
+mat tab2=J(`rd',5,.)
+
+
+foreach x of local ivars3 {
+replace `x'=0 if `x'==.
+}
+
+
+
+replace any_opi_pre = 1 if iv_opi_pre | anti_tus_pre | hydrocodone_pre | oxycodone_pre | hydromorphone_pre ///
+| morphine_pre | fentanyl_pre | meperidine_pre | methadone_pre
+
+label var any_opi_pre "Any Opioid Use 12m pre"
+
+
+replace any_opi_post = 1 if iv_opi_post | anti_tus_post | codeine_post | hydrocodone_post | oxycodone_post ///
+| hydromorphone_post | morphine_post | fentanyl_post | meperidine_post | methadone_post
+
+label var any_opi_post "Any Opioid Use 12m post"
+
+
+
 local r = 2
 foreach x of local ivars {
 
-qui sum `x' if smi_qual==1
+qui sum `x' if age21_64==1
 mat tab2[`r',1]=r(mean)*100
 
-qui sum `x' if dart_qual==1
+qui sum `x' if age_65==1
 mat tab2[`r',2]=r(mean)*100
 
-qui sum `x' if both_qual==1
+qui sum `x' if manhattan==1
 mat tab2[`r',3]=r(mean)*100
 
-qui sum `x' if all==1
+qui sum `x' if manhattan==0
 mat tab2[`r',4]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',5]=r(mean)*100
 local ++r
 }
 local ++r
 
 foreach x of local ivars2 {
 
-qui sum `x' if smi_qual==1
+qui sum `x' if age21_64==1
 mat tab2[`r',1]=r(mean)*100
 
-qui sum `x' if dart_qual==1
+qui sum `x' if age_65==1
 mat tab2[`r',2]=r(mean)*100
 
-qui sum `x' if both_qual==1
+qui sum `x' if manhattan==1
 mat tab2[`r',3]=r(mean)*100
 
-qui sum `x' if all==1
+qui sum `x' if manhattan==0
 mat tab2[`r',4]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',5]=r(mean)*100
 local ++r
 }
 
@@ -3811,54 +4131,66 @@ local ++r
 
 foreach x of local ivars3 {
 
-qui sum `x' if smi_qual==1
+qui sum `x' if age21_64==1
 mat tab2[`r',1]=r(mean)*100
 
-qui sum `x' if dart_qual==1
+qui sum `x' if age_65==1
 mat tab2[`r',2]=r(mean)*100
 
-qui sum `x' if both_qual==1
+qui sum `x' if manhattan==1
 mat tab2[`r',3]=r(mean)*100
 
-qui sum `x' if all==1
+qui sum `x' if manhattan==0
 mat tab2[`r',4]=r(mean)*100
+
+qui sum `x' if all==1
+mat tab2[`r',5]=r(mean)*100
 local ++r
 }
 
 
 
-qui sum age if smi_qual==1
+qui sum age if age21_64==1
 mat tab2[`r',1]=r(mean)
 
-qui sum age if dart_qual==1
+qui sum age if age_65==1
 mat tab2[`r',2]=r(mean)
 
-qui sum age if both_qual==1
+qui sum age if manhattan==1
 mat tab2[`r',3]=r(mean)
 
-qui sum age if all==1
+qui sum age if manhattan==0
 mat tab2[`r',4]=r(mean)
+
+qui sum age if all==1
+mat tab2[`r',5]=r(mean)
 local ++r
 
 
 
 
-qui sum age if smi_qual==1
+qui sum age if age21_64==1
 mat tab2[`r',1]=r(N)
 
-qui sum age if dart_qual==1
+qui sum age if age_65==1
 mat tab2[`r',2]=r(N)
 
-qui sum age if both_qual==1
+qui sum age if manhattan==1
 mat tab2[`r',3]=r(N)
 
-qui sum age if all==1
+qui sum age if manhattan==0
 mat tab2[`r',4]=r(N)
+
+qui sum age if all==1
+mat tab2[`r',5]=r(N)
 local ++r
 
-mat rownames tab2 = "Charlson Comorbidities 12m pre" `ivars' "Utilization" `ivars2' "Opioids" `ivars3' "Mean Age" "Sample Size"
+
+local ++r
+
+mat rownames tab2 = "Charlson Comorbidities 12m pre" `ivars' "Utilization" `ivars2' "Opioids" `ivars3' "Mean Age" "Sample Size (n)"
 matlist tab2
 
-frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\table3.doc", addtable statmat(tab2) ///
-varlabels title("HoPe Project: Comorbidities, Utilization and Opioids ") ctitles("" "SMI Qualified (%)" "Dartmouth MM Qualified (%)" "Dual SMI/Dartmouth (%)" "All (%)") sdec(2) ///
-note("12m Look back period includes the index visit. Dual SMI/MM qualification occurs if they simultaneously meet both criteria on their index visit")
+frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\tables_revised.doc", addtable statmat(tab2) ///
+varlabels title("HoPe Project: Comorbidities, Utilization and Opioids - 12m Look Back/Look Forward from 2015 Index Date ") ctitles("" "Age 21-64 (%)" "Age 65+ (%)" "Manhattan (%)" "Not Manhattan(%)" "All (%)") sdec(2) ///
+note("Charlson Comorbidities were determined from ICD-9 & ICD-10 dx codes pulled from billing data and problem list")
