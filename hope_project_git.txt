@@ -1505,7 +1505,7 @@ proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\problemlist.cs
 	 getnames=YES;
 	 run;
 
-proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
+proc import datafile="J:\Geriatrics\PCare\HoPe Projeclt\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
 	 getnames=YES;
 	 run;
 
@@ -3624,59 +3624,6 @@ quit;
  proc export data=painmeds_post1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\painmeds_post.dta" dbms=stata replace; run;
 
 H="VNS + DNR Orders"
-proc sql;
-create table dnr_b4_1 as select distinct mrn,
-sum(dnr) as com_dnr_n1,
-sum(dnr_dni) as com_dnr_dni_n1
-from dnr_b4
-group by mrn;
-quit;
-
-data vns_b4_1;
-set vns_b4_1;
-label com_admit_n1        = "Admit To Mount Sinai VNS Hospice";
-label com_con_visdoc_n1 = "CONSULT TO VISITING DOCTORS";
-label com_con_visnurse_n1 = "CONSULT TO VISITING NURSE SERVICE";
-label com_con_visfalls_n1 = "Consult To VNS FALLS STRONG PROGRAM";
-label com_disch_n1 = "Discharge Patient To Mount Sinai VNS Hospice";
-label com_famvis_n1 = "Do Not Restrict Family Visiting Hours";
-label com_ip_visdoc_n1  = "IP CONSULT TO VISITING DOCTORS";
-label com_ip_visnurse_n1 = "IP CONSULT TO VISITING NURSE SERVICE";
-label com_soc_vns_n1      = "Social Work Consult To Visiting Nurse Service";
-run;
-
-data vns_after_1;
-set vns_after_1;
-label com_admit_p1        = "Admit To Mount Sinai VNS Hospice";
-label com_con_visdoc_p1 = "CONSULT TO VISITING DOCTORS";
-label com_con_visnurse_p1 = "CONSULT TO VISITING NURSE SERVICE";
-label com_con_visfalls_p1 = "Consult To VNS FALLS STRONG PROGRAM";
-label com_disch_p1 = "Discharge Patient To Mount Sinai VNS Hospice";
-label com_famvis_p1 = "DO NOT RESTRICT FAMILY VISITING HOURS";
-label com_ip_visdoc_p1  = "IP CONSULT TO VISITING DOCTORS";
-label com_ip_visnurse_p1 = "IP CONSULT TO VISITING NURSE SERVICE";
-label com_soc_vns_p1      = "Social Work Consult To Visiting Nurse Service";
-run;
-
-data dnr_b4_1;
-set dnr_b4_1;
-label com_dnr_n1 = "DNR (DO NOT RESUSCITATE)";
-label com_dnr_dni_n1 = "DNR/DNI (DO NOT RESUSCITATE/DO NOT INTUBATE)";
-run;
-
-data dnr_after_1;
-set dnr_after_1;
-label com_dnr_p1 = "DNR (DO NOT RESUSCITATE)";
-label com_dnr_dni_p1 = "DNR/DNI (DO NOT RESUSCITATE/DO NOT INTUBATE)";
-run;
-
-
-
-
-proc export data=vns_b4_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\vns_b4.dta" dbms=stata replace; run;
-proc export data=vns_after_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\vns_after.dta" dbms=stata replace; run;
-proc export data=dnr_b4_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dnr_b4.dta" dbms=stata replace; run;
-proc export data=dnr_after_1 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\dnr_after.dta" dbms=stata replace; run;
 /*VNS and DNR */
 
 libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
@@ -4453,6 +4400,7 @@ note("")
 
 
 H="Frequency Matrix for Charlson vs Dartmouth Part 1"
+
 data cohort_1 (keep =mrn date dart_cancer--both_qual age);
 set hope.criteria_met_9m;
 run;
@@ -4460,14 +4408,14 @@ run;
 
 data cohort_1;
 set cohort_1;
-if both_qual = 1 then smi_qual = 1;
+if any_dart>=1;
 run;
 
 proc freq data=cohort_1; tables smi_qual; run;
 
 data mrnlist (keep = mrn);
 set cohort_1;
-where smi_qual = 0;
+*where smi_qual = 0;
 run;
 
 data encounterlist; /*utilization for the 42k mrn */
@@ -4509,6 +4457,7 @@ comorbi_14=0;
 comorbi_15=0;
 comorbi_16=0;
 comorbi_17=0;
+comorbi_18=0;
 array dx dx_code;
 do over dx;
 *Congestive Heart Failure;
@@ -4608,23 +4557,23 @@ do over dx;
 		then comorbi_5=1;
 	*Chronic Pulmonary Disease ;
         if(substr(dx,1,5)='4168' or
-               substr(dx,1,4)='4169' or
-               substr(dx,1,3)='490' or
-               substr(dx,1,3)='491' or
-               substr(dx,1,3)='492' or
-               substr(dx,1,3)='493' or
-               substr(dx,1,3)='494' or
-               substr(dx,1,3)='495' or
-               substr(dx,1,3)='496' or
-               substr(dx,1,3)='500' or
-               substr(dx,1,3)='501' or
-               substr(dx,1,3)='502' or
-               substr(dx,1,3)='503' or
-               substr(dx,1,3)='504' or
-               substr(dx,1,3)='505' or
-               substr(dx,1,4)='5064' or
-               substr(dx,1,4)='5081' or
-               substr(dx,1,4)='5088') /* or
+           substr(dx,1,4)='4169' or
+           substr(dx,1,3)='490' or
+           substr(dx,1,3)='491' or
+           substr(dx,1,3)='492' or
+           substr(dx,1,3)='493' or
+           substr(dx,1,3)='494' or
+           substr(dx,1,3)='495' or
+           substr(dx,1,3)='496' or
+           substr(dx,1,3)='500' or
+           substr(dx,1,3)='501' or
+           substr(dx,1,3)='502' or
+           substr(dx,1,3)='503' or
+           substr(dx,1,3)='504' or
+           substr(dx,1,3)='505' or
+           substr(dx,1,4)='5064' or
+           substr(dx,1,4)='5081' or
+           substr(dx,1,4)='5088') /* or
 			   substr(dx,1,4)='I278' or
                substr(dx,1,4)='I279' or
                substr(dx,1,3)='J40' or
@@ -4873,16 +4822,16 @@ do over dx;
 		substr(dx,1,3)='193' or
 		substr(dx,1,3)='194' or
 		substr(dx,1,3)='195' or
-                substr(dx,1,3)='200' or
-                substr(dx,1,3)='201' or
-                substr(dx,1,3)='202' or
-                substr(dx,1,3)='203' or
-                substr(dx,1,3)='204' or
-                substr(dx,1,3)='205' or
-                substr(dx,1,3)='206' or
-                substr(dx,1,3)='207' or
-                substr(dx,1,3)='208' or
-                substr(dx,1,3)='2386' )/* or
+        substr(dx,1,3)='200' or
+        substr(dx,1,3)='201' or
+        substr(dx,1,3)='202' or
+        substr(dx,1,3)='203' or
+        substr(dx,1,3)='204' or
+        substr(dx,1,3)='205' or
+        substr(dx,1,3)='206' or
+        substr(dx,1,3)='207' or
+        substr(dx,1,3)='208' or
+        substr(dx,1,3)='2386' )/* or
 			substr(dx,1,3)='C00' or
 		substr(dx,1,3)='C01' or
 		substr(dx,1,3)='C02' or
@@ -5010,6 +4959,63 @@ do over dx;
 		substr(dx,1,3)='B24')*/
 			and comorbi_17=0 
 		then comorbi_17=1;
+/* ICD 9 - Ischemic Heart Disease */
+if(substr(dx,1,5)=	'41000'	or
+substr(dx,1,5)=	'41001'	or
+substr(dx,1,5)=	'41002'	or
+substr(dx,1,5)=	'41010'	or
+substr(dx,1,5)=	'41011'	or
+substr(dx,1,5)=	'41012'	or
+substr(dx,1,5)=	'41020'	or
+substr(dx,1,5)=	'41021'	or
+substr(dx,1,5)=	'41022'	or
+substr(dx,1,5)=	'41030'	or
+substr(dx,1,5)=	'41031'	or
+substr(dx,1,5)=	'41032'	or
+substr(dx,1,5)=	'41040'	or
+substr(dx,1,5)=	'41041'	or
+substr(dx,1,5)=	'41042'	or
+substr(dx,1,5)=	'41050'	or
+substr(dx,1,5)=	'41051'	or
+substr(dx,1,5)=	'41052'	or
+substr(dx,1,5)=	'41060'	or
+substr(dx,1,5)=	'41061'	or
+substr(dx,1,5)=	'41062'	or
+substr(dx,1,5)=	'41070'	or
+substr(dx,1,5)=	'41071'	or
+substr(dx,1,5)=	'41072'	or
+substr(dx,1,5)=	'41080'	or
+substr(dx,1,5)=	'41081'	or
+substr(dx,1,5)=	'41082'	or
+substr(dx,1,5)=	'41090'	or
+substr(dx,1,5)=	'41091'	or
+substr(dx,1,5)=	'41092'	or
+substr(dx,1,4)=	'4110'	or
+substr(dx,1,4)=	'4111'	or
+substr(dx,1,5)=	'41181'	or
+substr(dx,1,5)=	'41189'	or
+substr(dx,1,4)=	'412'	or
+substr(dx,1,4)=	'4130'	or
+substr(dx,1,4)=	'4131'	or
+substr(dx,1,4)=	'4139'	or
+substr(dx,1,5)=	'41400'	or
+substr(dx,1,5)=	'41401'	or
+substr(dx,1,5)=	'41402'	or
+substr(dx,1,5)=	'41403'	or
+substr(dx,1,5)=	'41404'	or
+substr(dx,1,5)=	'41405'	or
+substr(dx,1,5)=	'41406'	or
+substr(dx,1,5)=	'41407'	or
+substr(dx,1,5)=	'41410'	or
+substr(dx,1,5)=	'41411'	or
+substr(dx,1,5)=	'41412'	or
+substr(dx,1,5)=	'41419'	or
+substr(dx,1,4)=	'4142'	or
+substr(dx,1,4)=	'4143'	or
+substr(dx,1,4)=	'4148'	or
+substr(dx,1,4)=	'4149' )
+and comorbi_18 = 0
+then comorbi_18 = 1;
 
 end;
 run;
@@ -5034,15 +5040,16 @@ sum(comorbi_13) as com_13,
 sum(comorbi_14) as com_14,
 sum(comorbi_15) as com_15,
 sum(comorbi_16) as com_16,
-sum(comorbi_17) as com_17
+sum(comorbi_17) as com_17,
+sum(comorbi_18) as com_18
 from charlson
 group by mrn;
 quit;
 
 data charlson1;
 set charlson1;
-array list_com com_1-com_17;
-array list_com_bin comorbi_1-comorbi_17;
+array list_com com_1-com_18;
+array list_com_bin comorbi_1-comorbi_18;
 
 do over list_com;
 list_com_bin=0;
@@ -5052,7 +5059,7 @@ end;
 end;
 comorb_all=comorbi_1+comorbi_2+comorbi_3+comorbi_4+comorbi_5+comorbi_6+
 comorbi_7+comorbi_8+comorbi_9+comorbi_10+comorbi_11+comorbi_12+comorbi_13+
-comorbi_14+comorbi_15+comorbi_16+comorbi_17;
+comorbi_14+comorbi_15+comorbi_16+comorbi_17+comorbi_18;
 *where mrn > .;
 run;
 
@@ -5075,6 +5082,7 @@ label comorbi_14 ="Cancer";
 label comorbi_15 ="Moderate or Severe Liver Disease";
 label comorbi_16 ="Metastatic Carcinoma";
 label comorbi_17 ="AIDS/HIV";
+label comorbi_18 ="SMI - IHD";
 run;
 
 data table1 (keep = mrn comorbi_1--comorb_all);
@@ -5091,13 +5099,14 @@ quit;
 
 proc export data=cohort_dx outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\cohort_mm_charls.dta" dbms=stata replace; run;
 
+
 H="Frequency Matrix for Charlson vs Dartmouth Part 2"
-0use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\cohort_mm_charls.dta", clear
+use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\cohort_mm_charls.dta", clear
 
 local dart dart_cancer dart_copd dart_cad dart_chf dart_pvd dart_cld dart_diab dart_renal dart_dem
-local charls comorbi_1 comorbi_2 comorbi_3 comorbi_4 comorbi_5 comorbi_6 comorbi_7 comorbi_8 comorbi_9 comorbi_10 comorbi_11 comorbi_12 comorbi_13 comorbi_14 comorbi_15 comorbi_16 comorbi_17
+local charls comorbi_1 comorbi_2 comorbi_3 comorbi_4 comorbi_5 comorbi_6 comorbi_7 comorbi_8 comorbi_9 comorbi_10 comorbi_11 comorbi_12 comorbi_13 comorbi_14 comorbi_15 comorbi_16 comorbi_17 comorbi_18
 
-mat tab1=J(18,9,.)
+mat tab1=J(19,10,.)
 local r = 1
 local s = 1
 
@@ -5119,10 +5128,21 @@ mat tab1[`r',`s'] = r(sum)
 local ++s
 }
 
-mat rownames tab1 = `charls' "Number of people (out of n=1514) in Cohort w/Dartmouth Con."
+local r = 1
+
+foreach x of local charls {
+
+sum `x'
+mat tab1[`r',10] = r(sum)
+local ++r
+}
+
+
+
+mat rownames tab1 = `charls' "Number of people (n=13,434) in Cohort w/Dartmouth Con."
 
 mat list tab1
 
-frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mm_vs_charls.doc", replace statmat(tab1) la ///
-varlabels title("HoPe Project: Dartmouth and Charlson Comorbidites Jan-Sept 2015 for MM Only (n=1514)") ctitles(" " "Cancer" "COPD" "CAD" "CHF" "PVD" "CLD" "Diabetes" "Renal" "Dementia") sdec(0) ///
-note("Restricted to Ages 21+ Multimoribity qualified with no SMI. Charlson Comorbidites are ICD-9 dx codes from billing data in the first 9 months of 2015")
+frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mm_vs_charls2.doc", replace statmat(tab1) la ///
+varlabels title("HoPe Project: Dartmouth and Charlson Comorbidites Jan-Sept 2015 for anyone with 1+ Dartmouth Comorbidities (n=13,434)") ctitles(" " "Cancer" "COPD" "CAD" "CHF" "PVD" "CLD" "Diabetes" "Renal" "Dementia" "# in Cohort ") sdec(0) ///
+note("Restricted to Ages 21+ with at least 1 Darthmouth Comorbidity. Charlson Comorbidites are ICD-9 dx codes from billing data in the first 9 months of 2015")
