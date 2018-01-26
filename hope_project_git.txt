@@ -5,9 +5,10 @@ libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
 libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
 
 
-H="Identifying qualified SMI/MM Jan-Sept 2015 Part 1"
+H="Identifying qualified SMI/MM Jan-Sept 2015"
 libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
 libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
 
 /* Import Spreadsheet */
 
@@ -32,6 +33,12 @@ format date date10.;
 mrn1 = input(mrn, best12.);
 run;
 
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Utilization.csv" out=full_util dbms=csv replace; 
+getnames=YES;
+run;
+
+
+
 data encounterlist; /* First 9 months of 2015 */
 set encounterlist;
 where month(date)<=9;
@@ -47,6 +54,12 @@ inner join
 demographics b
 on a.mrn = b.mrn;
 quit;
+
+data demo1;
+set demo1;
+zip1 = substr(zip,1,3);
+run;
+
 
 data demo1; /* cut sample */
 set demo1;
@@ -1229,7 +1242,6 @@ label dart_dem = "Dartmouth - Dementia";
 label ind_multi = "Darthmouth Multimorbidity";
 run;
 
-H="Identifying index visit Part 2"
 data criteria2;
 set criteria1a;
 where any_smi>0 or any_dart>2;
@@ -1437,13 +1449,18 @@ on a.mrn=b.mrn;
 quit;
 
 proc sql;
-create table final1 as select a.*, b.age, b.manhattan, b.gender
+create table final1 as select a.*, b.age, b.manhattan, b.gender, b.dob
 from final a
 inner join demo1 b
 on a.mrn = b.mrn;
 quit;
 
+data mrnlist (keep = mrn dob);
+set final1;
+where manhattan = 1;
+run;
 
+proc export data=mrnlist outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mrnlist.csv" dbms=csv replace; run;
 /*
 
 proc sort data=combined1 nodupkey; by mrn date; run;
@@ -1505,7 +1522,7 @@ proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\problemlist.cs
 	 getnames=YES;
 	 run;
 
-proc import datafile="J:\Geriatrics\PCare\HoPe Projeclt\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrnlist_42k_DOB.csv" out=dob_list dbms=csv replace;
 	 getnames=YES;
 	 run;
 
@@ -2756,21 +2773,23 @@ run;
 */
 
 data cohort;
-set hope.index_date2;
+*set hope.cohort_man21nodem;
+set hope.cohort_manhattan21;
 mrn1 = input(mrn, best12.);
 run;
 
-
+/*
 proc sql;
 create table cohort1 as select a.*, b.age
 from cohort a
 inner join dob_list b
 on a.mrn1 = b.mrn;
 quit;
+*/
 
 proc sql;
 create table cohort2 as select a.*, b.gender
-from cohort1 a
+from cohort a
 inner join demographics b
 on a.mrn1 = b.mrn;
 quit;
@@ -2803,10 +2822,11 @@ proc sql;
 create table problemlist_3ak as select a.*, b.* /*billing data 1 year pre index */
 from cohort a
 inner join util b 
+/*on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365; includes index date*/
 on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365;
 quit;
 
-proc sql;
+proc sql; /* billing data 1 year post index */
 create table problemlist_post as select a.*, b.*
 from cohort a
 inner join util b 
@@ -2821,12 +2841,46 @@ if msdw_encounter_type = "Emergency" then ed_visit = 1;
 if icu_admission = "Y" then icu_admit = 1;
 run;
 
+proc sort data=problemlist_3ak out=problemlist_3ak_unique nodupkey; by encounterid; run;
+
+proc sort data=problemlist_3ak_unique out=problemlist_3ak_unique nodupkey; by mrn date; run;
+
+data problemlist_3ak_unique;
+set problemlist_3ak_unique;
+by mrn date;
+if first.mrn and first.date then first = 1;
+run;
+
+
+proc sql;
+create table numbers_pre as select distinct mrn,
+sum(ip_admit) as tot_ip_pre,
+sum(ed_visit) as tot_ed_pre,
+sum(icu_admit) as tot_icu_pre
+from problemlist_3ak_unique
+group by mrn;
+quit;
+
+
 data problemlist_post;
 set problemlist_post;
 if msdw_encounter_type = "Inpatient" then ip_admit_p = 1;
 if msdw_encounter_type = "Emergency" then ed_visit_p = 1;
 if icu_admission = "Y" then icu_admit_p = 1;
 run;
+
+proc sort data=problemlist_post out=problemlist_post_unique nodupkey; by encounterid; run;
+proc sort data=problemlist_post_unique out=problemlist_post_unique nodupkey; by mrn date; run;
+
+proc sql;
+create table numbers_post as select distinct mrn,
+sum(ip_admit_p) as tot_ip_post,
+sum(ed_visit_p) as tot_ed_post,
+sum(icu_admit_p) as tot_icu_post
+from problemlist_post_unique
+group by mrn;
+quit;
+
 
 data util_pre;
 set problemlist_3ak;
@@ -3488,18 +3542,21 @@ set plist_charlson;
 run;
 
 proc sql;
-create table table2 as select a.*,b.age, b.gender, b.smi_qual, b.dart_qual
+create table table2 as select a.*,b.age, b.gender
 from table1 a
 inner join cohort b
 on a.mrn=b.mrn;
 quit; 
 
 data table3;
-merge table2 ip_pre ip_post ed_pre ed_post icu_pre icu_post;
+merge table2 ip_pre ip_post ed_pre ed_post icu_pre icu_post numbers_pre numbers_post;
 by mrn;
 run;
 
 proc export data=table3 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2_test.dta" dbms=stata replace; run;
+
+proc export data=hope.cohort_man21nodem outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\cohort_man21nodem.dta"; run;
+
 
 H="Opioids"
 proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelley results 8-23-17_noshow_meds.xlsx" out=meds dbms=xlsx replace;
@@ -4005,11 +4062,13 @@ H="Summary Tables: DX, Comorbs, Utils, Opioids, etc."
 use "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_1yrback.dta", clear
 
 cap drop _m
-merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\criteria_met_9m.dta", keepus(age manhattan)
+*merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\cohort_man21nodem.dta", 
+merge 1:1 mrn using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\table2_test.dta", keepus(age gender)
+keep if _m==3
 cap drop _m
 
 
-keep if manhattan==1
+*keep if manhattan==1
 
 label var ind_multi "Multimorbidity"
 
@@ -4061,7 +4120,7 @@ mat list tab1
 
 frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\tables_revised.doc", replace statmat(tab1) ///
 varlabels title("HoPe Project: Diagnosis Distribution, 12m Look Back From Index Visit") ctitles("" "Age 21-64 (%)" "Age 65+ (%)" "All (%)") sdec(2) ///
-note("Index date determined by first occurance of qualifying ICD-9 diagnosis codes from Jan-Sept 2015 billing data")
+note("Index date determined by first occurance of qualifying ICD-9 diagnosis codes from Jan-Sept 2015 billing data. Data is restricted to Manhattan residents 21 or older.")
 
 
 
@@ -4175,7 +4234,7 @@ matlist tab2
 
 frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\tables_revised.doc", addtable statmat(tab2) ///
 varlabels title("HoPe Project: Charlson Comorbidities Prior to Index Visit") ctitles("" "Age 21-64 (%)" "Age 65+ (%)" "All (%)") sdec(2) ///
-note("Charlson Comorbidities were determined from ICD-9 & ICD-10 dx codes pulled from billing data and problem list")
+note("Charlson Comorbidities were determined from ICD-9 & ICD-10 dx codes pulled from billing data and problem list. Data is restricted to Manhattan residents 21 or older.")
 
 
 
@@ -4184,12 +4243,18 @@ note("Charlson Comorbidities were determined from ICD-9 & ICD-10 dx codes pulled
 
 label var ip_admit "Inpatient Admit 12m before (including index date)"
 label var ip_admit_p "Inpatient Admit 12m post (excluding index date)"
+label var tot_ip_pre "Average # of IP Admit 12m before"
+label var tot_ip_post "Average # of IP Admit 12m post"
 
 label var icu_admit "ICU Admit 12m before (including index date)"
 label var icu_admit_p "ICU Admit 12m post (excluding index date)"
+label var tot_icu_pre "Average # of ICU admit 12m pre"
+label var tot_icu_post "Average # of ICU admit 12m post"
 
 label var ed_visit "ED Visit 12m before (including index date)"
 label var ed_visit_p "ED Visit 12m post (excluding index date)"
+label var tot_ed_pre "Average # of ED visits 12m pre"
+label var tot_ed_post "Average # of ED visits 12m post"
 
 label var iv_opi_pre "IV Opioids 12m pre"
 label var anti_tus_pre "Anti-Tussive 12m pre"
@@ -4213,7 +4278,7 @@ label var fentanyl_post "Fentanyl 12m post"
 label var meperidine_post "Meperidine 12m post"
 label var methadone_post "Methadone 12m post"
 
-local util ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p 
+local util ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p // tot_ip_pre tot_ed_pre tot_icu_pre tot_ip_post tot_ed_post tot_icu_post
 
 
 
@@ -4311,13 +4376,14 @@ drop com_dnr_p1 com_dnr_dni_p1
 
 
 local ivars2 any_opi_pre any_opi_post ip_admit ip_admit_p ed_visit ed_visit_p icu_admit icu_admit_p 
+local ivars22 tot_ip_pre tot_ip_post tot_ed_pre tot_ed_post tot_icu_pre tot_icu_post
 local ivars3 toilet_n1 bathing_n1 walking_n1 wheelchair_n1 transfer_n1 toilet_p1 bathing_p1 walking_p1 wheelchair_p1 ///
 transfer_p1
 local ivars4 com_admit_n1 com_con_visfalls_n1 com_disch_n1 com_famvis_n1 com_soc_vns_n1 visdoc_n1 visnurse_n1 dnr_dni_n1
 local ivars5 com_admit_p1 com_con_visfalls_p1 com_disch_p1 com_famvis_p1 com_soc_vns_p1 visdoc_p1 visnurse_p1 dnr_dni_p1
 
 
-local rd: word count 1 `ivars2' 1 `ivars3' 1 `ivars4' 1 `ivars5' 1
+local rd: word count 1 `ivars2' `ivars22' `ivars22'  1 `ivars3' 1 `ivars4' 1 `ivars5' 1
 
 
 mat tab3=J(`rd',3,.)
@@ -4334,6 +4400,28 @@ mat tab3[`r',2]=r(mean)*100
 qui sum `x' if all==1
 mat tab3[`r',3]=r(mean)*100
 local ++r
+}
+
+foreach x of local ivars22 {
+
+qui sum `x' if age21_64==1
+mat tab3[`r',1]=r(mean)
+local ++r
+mat tab3[`r',1]=r(max)
+local --r
+
+qui sum `x' if age_65==1
+mat tab3[`r',2]=r(mean)
+local ++r
+mat tab3[`r',2]=r(max)
+local --r
+
+qui sum `x' if all==1
+mat tab3[`r',3]=r(mean)
+local ++r
+mat tab3[`r',3]=r(max)
+local ++r
+
 }
 
 local ++r
@@ -4390,13 +4478,17 @@ mat tab3[`r',2]=r(N)
 qui sum age if all==1
 mat tab3[`r',3]=r(N)
 
-
-mat rownames tab3 = "Opioids and Utilization" `ivars2' "DME" `ivars3' "VNS and DNR pre index" `ivars4' "VNS and DNR post index" `ivars5' "Sample Size (n)"
 matlist tab3
+
+mat rownames tab3 = "Opioids and Utilization" `ivars2' "Ave. # of IP stays 12m pre" "Max. # of IP stays 12m pre" "Ave. # of IP stays 12m post" ///
+"Max. # of IP stays 12m post" "Ave. # of ED visits 12m pre" "Max. # of ED visits 12m pre" "Ave. # of ED visits 12m post" "Max. # of ED visits 12m post" ///
+"Ave. # of ICU stays 12m pre" "Max. # of ICU stays 12m pre" "Ave. # of ICU stays 12m post" "Max. # of ICU stays 12m post" "DME" `ivars3' ///
+"VNS and DNR pre index" `ivars4' "VNS and DNR post index" `ivars5' "Sample Size (n)"
+
 
 frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\tables_revised.doc", addtable statmat(tab3) ///
 varlabels title("HoPe Project: Opioids, Utilization, DME and VNS/DNR orders") ctitles("" "Age 21-64 (%)" "Age 65+ (%)" "All (%)") sdec(2) ///
-note("")
+note("Data is restricted to Manhattan residents 21 or older.")
 
 
 H="Frequency Matrix for Charlson vs Dartmouth Part 1"
@@ -5146,3 +5238,448 @@ mat list tab1
 frmttable using "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output\mm_vs_charls2.doc", replace statmat(tab1) la ///
 varlabels title("HoPe Project: Dartmouth and Charlson Comorbidites Jan-Sept 2015 for anyone with 1+ Dartmouth Comorbidities (n=13,434)") ctitles(" " "Cancer" "COPD" "CAD" "CHF" "PVD" "CLD" "Diabetes" "Renal" "Dementia" "# in Cohort ") sdec(0) ///
 note("Restricted to Ages 21+ with at least 1 Darthmouth Comorbidity. Charlson Comorbidites are ICD-9 dx codes from billing data in the first 9 months of 2015")
+
+
+H="***************************"
+
+
+H="Cost Check"
+libname hope "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data";
+libname output "J:\Geriatrics\PCare\HoPe Project\Sinai Data\Output"; 
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Amy Kelly Cost Data 10-27-17.xlsx" out=cost dbms=xlsx replace; 
+	sheet="Sheet1"; 
+	getnames=YES;
+	run;
+
+
+proc import datafile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\mrns_msh_2015_meet_criteria_8_17.xls" out=origi replace; run;
+
+
+proc sort data=cost out=test1 nodupkey; by medical_record_number encounter_visit_id; run;
+
+
+/*
+proc sort data=cost dupout=test1 nodupkey; by medical_record_number encounter_visit_id; run;
+
+data test3;
+set cost;
+where encounter_visit_id = 74421189; run;
+*/
+
+proc sql;
+create table test2 as select a.*, b.*
+from test1 a
+inner join origi b
+on a.medical_record_number = b.mrn;
+quit;
+
+
+data test1;
+set test1;
+cost_flag =1;
+run;
+
+
+data encounterlist; /*utilization for the 42k mrn */
+set hope.encounterlistv2;
+date = input(encounter_date, mmddyy10.);
+format date date10.;
+mrn1 = input(mrn, best12.);
+encounter_visit = input(encounterid, best12.);
+where msdw_encounter_type="Inpatient";
+matched = 1;
+run;
+
+proc sort data=encounterlist nodupkey; by mrn encounter_visit; run;
+
+proc sql;
+create table cost_encounter as select a.*, b.matched
+from cost a
+left join encounterlist b
+on a.medical_record_number=b.mrn1 and a.encounter_visit_id=b.encounter_visit;
+quit; 
+
+
+data unmatched;
+set cost_encounter;
+if matched = 1 then delete;
+run;
+
+
+proc export data=unmatched outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\unmatched_cost.csv" dbms=csv replace; run;
+
+
+
+proc sort data=unmatched out=unmatched_mrn(keep=medical_record_number) nodupkey; by medical_record_number; run;
+
+
+proc sql;
+create table test as select a.*, b.*
+from unmatched_mrn a
+inner join origi b
+on a.medical_record_number = b.mrn;
+quit;
+
+
+
+
+*********************;
+
+data ip_encounterlist; /*ip utilization for the 42k mrn */
+set hope.encounterlistv2;
+date = input(encounter_date, mmddyy10.);
+format date date10.;
+mrn1 = input(mrn, best12.);
+encounter_visit = input(encounterid, best12.);
+where msdw_encounter_type="Inpatient";
+*matched = 1;
+run;
+
+data cost;
+set cost;
+matched = 1;
+run;
+
+
+proc sql;
+create table ip_matched as select a.*, b.*
+from ip_encounterlist a
+left join cost b
+on a.mrn1 = b.medical_record_number and a.encounter_visit=b.encounter_visit_id;
+quit;
+
+data ip_matched;
+set ip_matched;
+if matched = 1 then delete;
+run;
+
+proc sort data=ip_matched nodupkey; by mrn1; run;
+
+proc sql;
+create table ip_4 as select a.*, b. mrn1
+from origi a
+inner join ip_matched b
+on a.mrn=b.mrn1;
+quit;
+
+proc export data=ip_4 outfile="J:\Geriatrics\PCare\HoPe Project\Sinai Data\Data\unmatched_mrns.csv" dbms=csv replace; run;
+
+
+proc sql;
+create table origi_elist as select a.*, b.*
+from origi a
+inner join ip_encounterlist b
+on a.mrn=b.mrn1;
+quit;
+
+proc sql;
+create table test3 as select a.*, b.*
+from origi_elist a
+inner join unmatched_mrn b
+on a.mrn=b.medical_record_number;
+quit;
+
+
+
+
+
+
+
+
+
+
+
+
+proc sql;
+create table cost_data as select a.*, b.*
+from origi a
+inner join encounterlist b
+on a.mrn = b.mrn1;
+quit;
+
+data cost_data;
+set cost_data;
+*where msdw_encounter_type = "Inpatient";
+run;
+
+proc sort data=cost_data nodupkey; by mrn; run;
+
+proc sql;
+create table cost_test as select a.*, b.cost_flag
+from cost_data a
+left join test1 b
+on a.mrn=b.medical_record_number;
+quit;
+
+proc freq data=cost_test; tables cost_flag; run;
+
+data cost_test;
+set cost_test;
+where cost_dta = .;
+run;
+
+
+proc freq data=cost_data; tables msdw_encounter_type; run;
+
+
+
+
+
+proc sql;
+create table cost_data as select a.*, b.*
+from cost a
+inner join encounterlist b
+on a.medical_record_number = b.mrn1 and a.encounter_visit_id = b.encounter_visit;
+quit;
+
+proc sort data=cost nodupkey; by medical_record_number encounter_visit_id; run;
+
+proc sort data=cost_data nodupkey; by mrn1 encounter_visit; run;
+
+
+
+data cost_test;
+set cost;
+test = sum(act_var_dir_cost, act_var_indir_cost, act_fixed_indir_cost, act_var_indir_cost);
+run;
+
+
+H="Followup"
+/* Counting unique mrns in pre and post followup data */
+
+proc sort data=problemlist_3ak out=problemlistpre_mrn nodupkey; by mrn; run;
+
+proc sort data=problemlist_post out=problemlistpost_mrn nodupkey; by mrn; run;
+
+
+proc sql;
+create table test as select a.mrn, b.mrn
+from problemlistpost_mrn a
+inner join problemlistpre_mrn b
+on a.mrn=b.mrn;
+quit;
+
+/* Counting number of contact days in 2yr study period */
+
+
+data combined_util;
+set problemlist_3ak problemlist_post;
+run;
+
+
+proc sort data=combined_util nodupkey; by mrn encounterid; run;
+
+proc sort data=combined_util nodupkey; by mrn date; run;
+
+
+data problemlist_count;
+set combined_util;
+by mrn;
+cnt + 1;
+if first.mrn then cnt = 1;
+if last.mrn then last = 1;
+run;
+
+data problemlist_count;
+set problemlist_count;
+where last = 1;
+run;
+
+proc freq data=problemlist_count; tables cnt; run;
+
+/* Counting contact days pre index */
+
+proc sql;
+create table problemlist_3ak as select a.*, b.* /*billing data 1 year pre index */
+from cohort a
+inner join util b 
+/*on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365; includes index date*/
+on a.mrn = b.mrn1 and 0 < a.index_date - b.date <=365;
+quit;
+
+
+proc sort data=problemlist_3ak out=pl_test1 nodupkey; by mrn; run;
+
+proc sort data=problemlist_3ak out=pl_test2 nodupkey; by mrn; run;
+
+
+
+data pl_test2;
+set pl_test2;
+followup = 1;
+run;
+
+proc sql;
+create table pl_test as select a.*, b.followup
+from pl_test1 a
+left join pl_test2 b
+on a.mrn=b.mrn;
+quit;
+run;
+
+data pl_test (keep = mrn);
+set pl_test;
+where followup = .;
+run;
+
+proc sql;
+create table newtest as select a.*, b.*
+from problemlist_3ak a
+inner join pl_test b
+on a.mrn=b.mrn
+where a.index_date = a.date;
+quit;
+
+proc sort data=newtest nodupkey; by mrn date; run;
+proc freq data=newtest; tables msdw_encounter_type; run;
+
+
+
+
+
+data contactdays_pre;
+set problemlist_3ak;
+by mrn;
+contact_days + 1;
+if first.mrn then contact_days = 1;
+if last.mrn then last = 1;
+run;
+
+/* Contact days >=2 */
+
+data contactdays_prev2;
+set contactdays_pre;
+*where last=1 and contact_days>1;
+where contact_days>1;
+run;
+
+
+
+
+
+proc freq data=contactdays_pre; table contact_days; where last=1; run;
+
+proc freq data=contactdays_prev2; table contact_days; where last=1; run;
+
+
+title "Distribution of Contact Days 6m pre-Index (>=2 contact days)"; 
+ods graphics on;
+proc univariate data=contactdays_prev2; var contact_days; where last=1; histogram contact_days/ODSTITLE="Distribution of Contact Days 6m pre-Index (>=2 contact days)" midpoints=(5 to 115 by 10); run;
+
+
+/* Counting contact days for post index */
+
+data contact_post;
+set problemlist_post;
+run;
+
+proc sort data=contact_post nodupkey; by mrn encounterid; run;
+proc sort data=contact_post nodupkey; by mrn date; run;
+
+data contact_post;
+set contact_post;
+by mrn;
+cnt + 1;
+if first.mrn then cnt = 1 and first = 1;
+if last.mrn then last = 1;
+follow_up = date - index_date;
+run;
+
+data contact_post;
+set contact_post;
+*where last = 1;
+*where first = 1;
+run;
+
+proc means data=contact_post; var cnt follow_up; run;
+proc means data=contact_post median; var cnt follow_up; run;
+
+data days_3m;
+set contact_post;
+where follow_up >0 and follow_up <=91;
+run;
+
+proc sort data=days_3m nodupkey; by mrn; run;
+
+data days_6m;
+set contact_post;
+where follow_up >0 and follow_up <=182;
+run;
+
+proc sort data=days_6m nodupkey; by mrn; run;
+
+data days_9m;
+set contact_post;
+where follow_up >244and follow_up <=365;
+run;
+
+proc sort data=days_9m nodupkey; by mrn; run;
+
+data days_12m;
+set contact_post;
+where follow_up>273 and follow_up<=365;
+run;
+
+proc sort data=days_12m nodupkey; by mrn; run;
+
+proc sql;
+create table test as select a.mrn, b.mrn, c.mrn
+from days_3m a
+inner join days_6m b
+on a.mrn = b.mrn
+inner join days_9m c
+on b.mrn=c.mrn;
+quit;
+
+
+proc sql;
+create table problemlist_pre as select a.*, b.* /*billing data 1 year pre index */
+from cohort a
+inner join util b 
+/*on a.mrn = b.mrn1 and 0 <= a.index_date - b.date <=365; includes index date*/
+on a.mrn = b.mrn1 and 0 < a.index_date - b.date <=365;
+quit;
+
+proc sort data=problemlist_pre out=pre_mrn nodupkey; by mrn; run;
+
+data pre_mrn;
+set pre_mrn;
+visit_pre = 1;
+run;
+
+proc sql; /* billing data 1 year post index */
+create table problemlist_post as select a.*, b.*
+from cohort a
+inner join util b 
+on a.mrn = b.mrn1 and 0 < b.date - a.index_date <=365;
+quit;
+
+proc sort data=problemlist_post out=post_mrn nodupkey; by mrn; run;
+
+data post_mrn;
+set post_mrn;
+visit_post = 1;
+run;
+
+data index;
+set cohort;
+index = 1;
+run;
+
+
+proc sql;
+create table alltest as select a.*, b.*, c.*
+from index a
+left join pre_mrn b
+on a.mrn=b.mrn
+left join post_mrn c
+on a.mrn=c.mrn;
+quit;
+
+
+proc freq data=alltest; tables index visit_pre visit_post; run;
+proc freq data=alltest; tables index; where visit_post=. and visit_pre=.; run;
+
+
+
